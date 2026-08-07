@@ -36,8 +36,11 @@ polling_task = None
 async def lifespan(app: FastAPI):
     """Startup: init DB schema + launch background poller."""
     global polling_task
-    await init_schema()
-    polling_task = asyncio.create_task(poller_loop())
+    try:
+        await init_schema()
+        polling_task = asyncio.create_task(poller_loop())
+    except Exception as e:
+        print(f"[startup] DB/poller init failed (will retry on requests): {e}")
     yield
     # Shutdown
     if polling_task:
@@ -54,13 +57,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS: allow Vite dev server and deployed Vercel domains
+# CORS: allow all origins for deployed API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://*.vercel.app",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

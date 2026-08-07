@@ -35,3 +35,4 @@ route_data/*.csv
 
 # Docker
 *.pid
+.vercel

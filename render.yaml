@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: uga-bus-api
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn api:app --host 0.0.0.0 --port 10000"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: uga-bus-db
+          property: connectionString
+      - key: POLL_INTERVAL
+        value: 30
+    disk:
+      name: route-cache
+      mountPath: /opt/render/project/src/route_data
+      sizeGB: 1
+
+  - type: worker
+    name: uga-bus-poller
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -c 'from route_shapes import poll_and_compute; poll_and_compute()'"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: uga-bus-db
+          property: connectionString
+
+databases:
+  - name: uga-bus-db
+    plan: free
+    databaseName: uga_buses
+    user: uga_bus_user
