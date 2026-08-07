@@ -40503,45 +40503,21 @@ export function fetchRouteShape(routeId) {
   return Promise.resolve(routeShapes[routeId] || null);
 }
 
+// Backend URL - set this after deploying to Render
+// Format: https://your-app-name.onrender.com
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export function fetchBuses(routeId) {
-  // Call Passio GO via CORS proxy (no backend required)
-  const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://passiogo.com/mapGetData.php?getBuses=2');
+  if (!API_BASE) {
+    console.warn('No backend URL configured. Buses will not show.');
+    console.warn('Deploy backend to Render and set VITE_API_URL');
+    return Promise.resolve([]);
+  }
   
-  return fetch(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ s0: '3994', sA: 1 }),
-  })
+  return fetch(`${API_BASE}/routes/${routeId}/buses`)
     .then((res) => {
       if (!res.ok) throw new Error('Failed to fetch buses');
       return res.json();
-    })
-    .then((data) => {
-      const buses = data.buses || {};
-      const parsed = [];
-      for (const [vid, vlist] of Object.entries(buses)) {
-        if (vid === '-1' || !vlist || !vlist[0]) continue;
-        const v = vlist[0];
-        const bus = {
-          bus_id: String(v.id || vid),
-          bus_name: v.name || 'Unknown',
-          route_id: String(v.routeId || ''),
-          lat: parseFloat(v.latitude) || 0,
-          lon: parseFloat(v.longitude) || 0,
-          heading: v.calculatedCourse || v.course || 0,
-          speed: parseFloat(v.speed) || 0,
-          is_stale: false,
-          eta_seconds: null,
-          eta_display: null,
-          eta_source: null,
-          next_stop: null,
-          next_stop_pos: null,
-        };
-        if (!routeId || bus.route_id === routeId) {
-          parsed.push(bus);
-        }
-      }
-      return parsed;
     })
     .catch((e) => {
       console.error('Bus fetch error:', e);
