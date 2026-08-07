@@ -164,7 +164,8 @@ html, body, #root {
   gap: 0.5rem;
 }
 
-.theme-toggle {
+.theme-toggle,
+.location-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -179,8 +180,13 @@ html, body, #root {
   padding: 0;
   box-shadow: var(--shadow-fab);
 }
-.theme-toggle:hover {
+.theme-toggle:hover,
+.location-btn:hover {
   background: var(--surface-hover);
+}
+.location-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .status-pill {
@@ -526,6 +532,51 @@ html, body, #root {
 }
 .stop-marker:hover {
   transform: scale(1.3);
+}
+
+/* === Location Marker === */
+.location-marker {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.location-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3B82F6;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+  z-index: 2;
+}
+
+.location-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(59,130,246,0.3);
+  animation: location-pulse 2s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes location-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0;
+  }
 }
 
 /* === Map Popup === */

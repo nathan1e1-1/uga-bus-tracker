@@ -1,12 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { haversineDistance } from '../hooks/useGeolocation';
 
-export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, onClose }) {
+export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, userLocation, nearestStop, onClose }) {
   const [fromStopId, setFromStopId] = useState('');
   const [toStopId, setToStopId] = useState('');
+  const [useMyLocation, setUseMyLocation] = useState(false);
 
   const stops = selectedRouteShape?.stops || [];
   const routeName = selectedRouteShape?.route_name || 'Route';
   const routeColor = selectedRouteShape?.color || '#3B82F6';
+
+  // Auto-set "from" stop when user location is available
+  useEffect(() => {
+    if (useMyLocation && nearestStop) {
+      setFromStopId(String(nearestStop.stop_id));
+    } else if (!useMyLocation) {
+      setFromStopId('');
+    }
+  }, [useMyLocation, nearestStop]);
 
   // Build recommendations when both stops are selected
   const recommendations = useMemo(() => {
@@ -44,6 +55,20 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
     ];
   }, [fromStopId, toStopId, stops, liveBuses, selectedRouteId, routeName, routeColor]);
 
+  // Calculate distance to each stop from user location
+  const stopsWithDistance = useMemo(() => {
+    if (!userLocation) return stops.map(s => ({ ...s, distance: null }));
+    return stops.map((s) => ({
+      ...s,
+      distance: haversineDistance(
+        userLocation.lat,
+        userLocation.lng,
+        s.latitude || s.lat,
+        s.longitude || s.lng
+      ),
+    }));
+  }, [stops, userLocation]);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
@@ -55,20 +80,46 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
         </div>
 
         <div className="planner-body">
+          {/* Location toggle */}
+          {userLocation && (
+            <div className="field-group">
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={useMyLocation}
+                  onChange={(e) => setUseMyLocation(e.target.checked)}
+                  style={{ width: 'auto', cursor: 'pointer' }}
+                />
+                Use my current location
+              </label>
+              {useMyLocation && nearestStop && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                  Nearest stop: <strong style={{ color: 'var(--text-primary)' }}>{nearestStop.name}</strong> ({Math.round(nearestStop.distance)}m away)
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="field-group">
             <label className="field-label">From</label>
-            <select
-              className="stop-select"
-              value={fromStopId}
-              onChange={(e) => setFromStopId(e.target.value)}
-            >
-              <option value="" disabled>Pick your stop…</option>
-              {stops.map((s) => (
-                <option key={s.stop_id} value={String(s.stop_id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            {useMyLocation ? (
+              <div className="stop-select" style={{ background: 'var(--surface-hover)', cursor: 'default' }}>
+                {nearestStop ? nearestStop.name : 'Getting location...'}
+              </div>
+            ) : (
+              <select
+                className="stop-select"
+                value={fromStopId}
+                onChange={(e) => setFromStopId(e.target.value)}
+              >
+                <option value="" disabled>Pick your stop…</option>
+                {stopsWithDistance.map((s) => (
+                  <option key={s.stop_id} value={String(s.stop_id)}>
+                    {s.name} {s.distance != null ? `(${Math.round(s.distance)}m)` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="field-group">
@@ -79,7 +130,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
               onChange={(e) => setToStopId(e.target.value)}
             >
               <option value="" disabled>Pick destination…</option>
-              {stops.map((s) => (
+              {stopsWithDistance.map((s) => (
                 <option key={s.stop_id} value={String(s.stop_id)}>
                   {s.name}
                 </option>
@@ -101,7 +152,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
                     style={{
                       fontSize: '0.75rem',
                       fontWeight: 600,
-                      color: '#64748B',
+                      color: 'var(--text-secondary)',
                       textTransform: 'uppercase',
                       letterSpacing: '0.04em',
                       marginBottom: '0.5rem',
@@ -130,7 +181,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
                               ? '#10B981'
                               : bus.eta_source === 'arriving'
                                 ? '#F59E0B'
-                                : '#64748B',
+                                : 'var(--text-secondary)',
                           fontStyle:
                             bus.eta_source === 'estimated' || bus.eta_source === 'default'
                               ? 'italic'
@@ -145,7 +196,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
                               fontWeight: 600,
                               textTransform: 'uppercase',
                               letterSpacing: '0.04em',
-                              color: '#94A3B8',
+                              color: 'var(--text-muted)',
                               textAlign: 'right',
                               marginTop: 2,
                             }}

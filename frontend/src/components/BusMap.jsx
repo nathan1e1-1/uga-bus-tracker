@@ -50,7 +50,21 @@ function createStopIcon(color) {
   });
 }
 
-export default function BusMap({ routeShape, buses, isDark }) {
+function createLocationIcon() {
+  return L.divIcon({
+    className: '',
+    html: `
+      <div class="location-marker">
+        <div class="location-dot"></div>
+        <div class="location-pulse"></div>
+      </div>
+    `,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
+export default function BusMap({ routeShape, buses, isDark, userLocation, nearestStop }) {
   const bounds = useMemo(() => {
     const pts = [];
     if (routeShape) {
@@ -59,8 +73,11 @@ export default function BusMap({ routeShape, buses, isDark }) {
     buses.forEach((b) => {
       if (b.lat && b.lon) pts.push([b.lat, b.lon]);
     });
+    if (userLocation) {
+      pts.push([userLocation.lat, userLocation.lng]);
+    }
     return pts;
-  }, [routeShape, buses]);
+  }, [routeShape, buses, userLocation]);
 
   const polyline = routeShape?.polyline;
   const stops = routeShape?.stops || [];
@@ -110,6 +127,26 @@ export default function BusMap({ routeShape, buses, isDark }) {
             </Popup>
           </Marker>
         ))}
+
+        {/* User location marker */}
+        {userLocation && (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={createLocationIcon()}
+            zIndexOffset={2000}
+          >
+            <Popup>
+              <div style={{ fontFamily: 'Helvetica-Bold, sans-serif', fontSize: '0.85rem' }}>
+                <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Your Location</strong>
+                {nearestStop && (
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: 4 }}>
+                    Nearest stop: {nearestStop.name} ({Math.round(nearestStop.distance)}m away)
+                  </div>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        )}
 
         {/* Bus markers */}
         {buses.map((bus) => {
