@@ -1,63 +1,110 @@
 #!/usr/bin/env python3
 """
-FastAPI app for UGA Bus Route Optimizer.
-
-Startup:
-  - Creates Postgres schema (bus_state table)
-  - Launches background polling task
-
-Endpoints:
-  GET /routes/{route_id}/buses  → current bus positions & ETAs for a route
-  GET /health                     → liveness check
-
-Background task:
-  - Every POLL_INTERVAL_SECONDS, fetches Passio GO, computes speed/ETA,
-    upserts into bus_state table.
+Simplified FastAPI backend for UGA Bus Tracker.
+No database required - uses in-memory + file-based caching.
 """
 
 import asyncio
+import json
 import os
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 
-import asyncpg
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import requests
 
-from db import init_schema, upsert_bus_state, get_buses_for_route
-from route_shapes import poll_and_compute, save_history, load_or_fetch_routes
+# Config
+UGA_SYSTEM_ID = 3994
+BASE_URL = "https://passiogo.com"
+DATA_DIR = "route_data"
+ROUTE_CACHE_FILE = os.path.join(DATA_DIR, "route_cache.json")
+POLL_INTERVAL = 30  # seconds
 
-POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL", "30"))
-polling_task = None
+# In-memory bus state
+bus_cache = {}
+last_poll_time = None
+polling_active = False
 
+# Load route data
+route_shapes = {}
+stops_by_route = {}
+route_meta = {}
+route_total_len = {}
+
+def load_routes():
+    """Load cached route data."""
+    global route_shapes, stops_by_route, route_meta, route_total_len
+    if os.path.exists(ROUTE_CACHE_FILE):
+        with open(ROUTE_CACHE_FILE, 'r') as f:
+            cache = json.load(f)
+        route_shapes_raw = cache.get('route_shapes', {})
+        route_shapes = {
+            rid: [(p['lat'], p['lng']) for p in coords]
+            for rid, coords in route_shapes_raw.items()
+        }
+        stops_by_route = cache.get('stops_by_route', {})
+        route_meta = cache.get('route_meta', {})
+        route_total_len = cache.get('route_total_len', {})
+        print(f"[startup] Loaded {len(route_shapes)} routes")
+    else:
+        print("[startup] No route cache found!")
+
+async def poll_buses():
+    """Poll Passio GO for live bus positions."""
+    global bus_cache, last_poll_time
+    try:
+        url = f"{BASE_URL}/mapGetData.php?getBuses=2"
+        resp = requests.post(url, json={"s0": str(UGA_SYSTEM_ID), "sA": 1}, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        buses = data.get("buses", {})
+        bus_cache = {}
+        for vid, vlist in buses.items():
+            if vid == "-1" or not vlist:
+                continue
+            v = vlist[0]
+            bus_cache[str(v.get('id', vid))] = {
+                "bus_id": str(v.get('id', vid)),
+                "bus_name": v.get('name', 'Unknown'),
+                "route_id": str(v.get('routeId', '')),
+                "lat": float(v.get('latitude', 0)),
+                "lon": float(v.get('longitude', 0)),
+                "heading": v.get('calculatedCourse', v.get('course', 0)),
+                "speed": float(v.get('speed', 0)),
+                "timestamp": v.get('timestamp', datetime.now(timezone.utc).isoformat()),
+                "is_stale": False,
+            }
+        last_poll_time = datetime.now(timezone.utc)
+        print(f"[poll] {len(bus_cache)} buses active")
+    except Exception as e:
+        print(f"[poll] ERROR: {e}")
+
+async def poller_loop():
+    """Background polling task."""
+    global polling_active
+    polling_active = True
+    while polling_active:
+        await poll_buses()
+        await asyncio.sleep(POLL_INTERVAL)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB schema + launch background poller."""
-    global polling_task
-    try:
-        await init_schema()
-        polling_task = asyncio.create_task(poller_loop())
-    except Exception as e:
-        print(f"[startup] DB/poller init failed (will retry on requests): {e}")
+    """Startup: load routes + launch poller."""
+    load_routes()
+    asyncio.create_task(poller_loop())
     yield
-    # Shutdown
-    if polling_task:
-        polling_task.cancel()
-        try:
-            await polling_task
-        except asyncio.CancelledError:
-            pass
-
+    global polling_active
+    polling_active = False
 
 app = FastAPI(
-    title="UGA Bus Route Optimizer",
-    version="0.1.0",
+    title="UGA Bus Tracker API",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-# CORS: allow all origins for deployed API
+# CORS: allow all origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,83 +113,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STALE_THRESHOLD_SECONDS = 120  # 2 min — treat a bus as stale if not updated recently
-
-
-async def poller_loop():
-    """
-    Background task: poll Passio GO and upsert bus_state continuously.
-
-    NOTE: asyncio.sleep() is placed *after* the full work completes.
-    This means cycles never overlap even if a single poll is slow.
-    (Not a fixed-rate scheduler — work + sleep = period.)
-    """
-    while True:
-        try:
-            start = datetime.now(timezone.utc)
-            results, history = poll_and_compute()
-            await upsert_bus_state(results)
-            # TODO: drop disk writes once Postgres is fully trusted as the
-            # single source of truth. Kept for now as a safety net.
-            save_history(history)
-            elapsed = (datetime.now(timezone.utc) - start).total_seconds()
-            print(f"[poll] {len(results)} buses, {elapsed:.1f}s")
-        except Exception as e:
-            print(f"[poll] ERROR: {e}")
-        await asyncio.sleep(POLL_INTERVAL_SECONDS)
-
-
 @app.get("/health")
 async def health():
-    """Liveness probe."""
-    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
-
-
-@app.get("/routes/{route_id}/buses")
-async def get_route_buses(route_id: str):
-    """
-    Return current bus state for a given route_id.
-
-    Each bus object includes a computed `is_stale` flag based on
-    `updated_at` age, so the frontend never trusts a silently
-    stale row.
-    """
-    rows = await get_buses_for_route(route_id)
-    now = datetime.now(timezone.utc)
-    for r in rows:
-        updated_at = r.get("updated_at")
-        if updated_at:
-            age = (now - updated_at).total_seconds()
-            r["is_stale"] = age > STALE_THRESHOLD_SECONDS
-        else:
-            r["is_stale"] = True
-    if not rows:
-        return JSONResponse(content=[], status_code=200)
-    return rows
-
-
-@app.get("/routes/{route_id}/buses/{bus_id}")
-async def get_bus(route_id: str, bus_id: str):
-    """Single bus lookup (optional convenience endpoint)."""
-    rows = await get_buses_for_route(route_id)
-    now = datetime.now(timezone.utc)
-    for r in rows:
-        if r["bus_id"] == bus_id:
-            updated_at = r.get("updated_at")
-            if updated_at:
-                age = (now - updated_at).total_seconds()
-                r["is_stale"] = age > STALE_THRESHOLD_SECONDS
-            else:
-                r["is_stale"] = True
-            return r
-    raise HTTPException(status_code=404, detail="Bus not found")
-
+    return {
+        "status": "ok",
+        "buses_cached": len(bus_cache),
+        "last_poll": last_poll_time.isoformat() if last_poll_time else None,
+    }
 
 @app.get("/routes")
 async def list_routes():
-    """Return all available routes (names + IDs) for the route picker."""
-    route_shapes, stops_by_route, route_cumulative, route_total_len, route_meta = \
-        load_or_fetch_routes()
     routes = []
     for rid in sorted(route_shapes.keys()):
         meta = route_meta.get(rid, {})
@@ -156,17 +136,13 @@ async def list_routes():
         })
     return routes
 
-
 @app.get("/routes/{route_id}/shape")
 async def get_route_shape(route_id: str):
-    """Return the route polyline and stop list for map rendering."""
-    route_shapes, stops_by_route, route_cumulative, route_total_len, route_meta = \
-        load_or_fetch_routes()
     coords = route_shapes.get(route_id)
     stops = stops_by_route.get(route_id, [])
     meta = route_meta.get(route_id, {})
     if not coords:
-        raise HTTPException(status_code=404, detail="Route not found")
+        return {"error": "Route not found"}
     return {
         "route_id": route_id,
         "route_name": meta.get("name", route_id),
@@ -176,7 +152,21 @@ async def get_route_shape(route_id: str):
         "total_length_m": route_total_len.get(route_id),
     }
 
+@app.get("/routes/{route_id}/buses")
+async def get_route_buses(route_id: str):
+    """Return buses for a specific route."""
+    route_buses = [
+        bus for bus in bus_cache.values()
+        if bus["route_id"] == route_id
+    ]
+    return route_buses
+
+@app.get("/buses")
+async def get_all_buses():
+    """Return all active buses."""
+    return list(bus_cache.values())
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
