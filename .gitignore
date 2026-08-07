@@ -30,7 +30,7 @@ Thumbs.db
 # Data (large files)
 bus_data/*.json
 bus_data/*.csv
-route_data/*.json
+route_data/bus_history.json
 route_data/*.csv
 
 # Docker
