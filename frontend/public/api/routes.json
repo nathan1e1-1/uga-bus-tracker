@@ -1,0 +1,100 @@
+[
+  {
+    "route_id": "44886",
+    "route_name": "Central East",
+    "color": "#075CFF",
+    "stop_count": 20,
+    "total_length_m": 8685.626542137428
+  },
+  {
+    "route_id": "53275",
+    "route_name": "Chicopee Shuttle",
+    "color": "#EF00B7",
+    "stop_count": 5,
+    "total_length_m": 3939.386373162704
+  },
+  {
+    "route_id": "63958",
+    "route_name": "East West",
+    "color": "#ED5F00",
+    "stop_count": 14,
+    "total_length_m": 6963.564851424022
+  },
+  {
+    "route_id": "64005",
+    "route_name": "West Campus ",
+    "color": "#009EB3",
+    "stop_count": 10,
+    "total_length_m": 3645.4046650596847
+  },
+  {
+    "route_id": "64018",
+    "route_name": "Campus Housing",
+    "color": "#167D0C",
+    "stop_count": 24,
+    "total_length_m": 10290.636218510937
+  },
+  {
+    "route_id": "64019",
+    "route_name": "Campus Housing Night",
+    "color": "#167D0C",
+    "stop_count": 28,
+    "total_length_m": 12767.83248060343
+  },
+  {
+    "route_id": "64201",
+    "route_name": "North South ",
+    "color": "#B2844B",
+    "stop_count": 21,
+    "total_length_m": 11408.843340813031
+  },
+  {
+    "route_id": "64208",
+    "route_name": "Riverbend ",
+    "color": "#69940C",
+    "stop_count": 19,
+    "total_length_m": 19839.976295470773
+  },
+  {
+    "route_id": "64252",
+    "route_name": "Health Science",
+    "color": "#7452FF",
+    "stop_count": 12,
+    "total_length_m": 9896.374755071352
+  },
+  {
+    "route_id": "64253",
+    "route_name": "Milledge Night",
+    "color": "#FF2E32",
+    "stop_count": 19,
+    "total_length_m": 10897.4701859569
+  },
+  {
+    "route_id": "72874",
+    "route_name": "Main Campus",
+    "color": "#DB0101",
+    "stop_count": 21,
+    "total_length_m": 8640.598478925085
+  },
+  {
+    "route_id": "72940",
+    "route_name": "Milledge",
+    "color": "#FF2E32",
+    "stop_count": 23,
+    "total_length_m": 9865.235816792472
+  },
+  {
+    "route_id": "72945",
+    "route_name": "Vet Med",
+    "color": "#8582E1",
+    "stop_count": 25,
+    "total_length_m": 13178.577269241661
+  },
+  {
+    "route_id": "73483",
+    "route_name": "North South Night",
+    "color": "#B2844B",
+    "stop_count": 31,
+    "total_length_m": 16184.080375067277
+  }
+]
