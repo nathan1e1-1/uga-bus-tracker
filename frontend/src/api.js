@@ -40514,13 +40514,24 @@ export function fetchBuses(routeId) {
     return Promise.resolve([]);
   }
   
-  return fetch(`${API_BASE}/routes/${routeId}/buses`)
+  const url = `${API_BASE}/routes/${routeId}/buses`;
+  console.log('[fetchBuses] Requesting:', url);
+  
+  return fetch(url)
     .then((res) => {
-      if (!res.ok) throw new Error('Failed to fetch buses');
+      console.log('[fetchBuses] Response status:', res.status);
+      if (!res.ok) {
+        console.error('[fetchBuses] HTTP error:', res.status, res.statusText);
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
       return res.json();
     })
+    .then((data) => {
+      console.log('[fetchBuses] Received', data.length, 'buses');
+      return data;
+    })
     .catch((e) => {
-      console.error('Bus fetch error:', e);
+      console.error('[fetchBuses] Fetch failed:', e.message);
       return [];
     });
 }
