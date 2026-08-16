@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchRoutes, fetchRouteShape } from './api';
+import {
+  groupRoutes,
+  resolveDirectionByLocation,
+  getOppositeDirectionId,
+} from './utils/routeGroups';
 import { useBusPolling } from './hooks/useBusPolling';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useGeolocation, findNearestStop } from './hooks/useGeolocation';
@@ -9,6 +14,8 @@ import './App.css';
 
 export default function App() {
   const [routes, setRoutes] = useState([]);
+  const [routeGroups, setRouteGroups] = useState([]);
+  const [selectedGroupName, setSelectedGroupName] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [routeShape, setRouteShape] = useState(null);
   const [shapeLoading, setShapeLoading] = useState(false);
@@ -21,22 +28,38 @@ export default function App() {
   // Load route list on mount
   useEffect(() => {
     fetchRoutes()
-      .then((data) => setRoutes(data))
+      .then((data) => {
+        setRoutes(data);
+        const groups = groupRoutes(data);
+        setRouteGroups(groups);
+      })
       .catch((e) => console.error('Failed to load routes:', e));
   }, []);
 
   // Load route shape when selection changes
   useEffect(() => {
-    if (!selectedRouteId) {
+    if (!selectedGroupName) {
       setRouteShape(null);
       return;
     }
+    const group = routeGroups.find((g) => g.displayName === selectedGroupName);
+    if (!group) return;
+
     setShapeLoading(true);
-    fetchRouteShape(selectedRouteId)
-      .then((data) => setRouteShape(data))
-      .catch((e) => console.error('Failed to load route shape:', e))
+    Promise.all(group.ids.map((id) => fetchRouteShape(id)))
+      .then((shapes) => {
+        const shapeMap = Object.fromEntries(group.ids.map((id, i) => [id, shapes[i]]));
+        let pickedId = group.ids[0];
+        if (group.ids.length > 1 && userLocation) {
+          const byLocation = resolveDirectionByLocation(group, shapeMap, userLocation);
+          if (byLocation) pickedId = byLocation;
+        }
+        setSelectedRouteId(pickedId);
+        setRouteShape(shapeMap[pickedId]);
+      })
+      .catch((e) => console.error('Failed to load route shapes:', e))
       .finally(() => setShapeLoading(false));
-  }, [selectedRouteId]);
+  }, [selectedGroupName, routeGroups, userLocation]);
 
   const selectedRoute = useMemo(
     () => routes.find((r) => r.route_id === selectedRouteId),
@@ -60,16 +83,35 @@ export default function App() {
 
         <select
           className="pill-select"
-          value={selectedRouteId || ''}
-          onChange={(e) => setSelectedRouteId(e.target.value)}
+          value={selectedGroupName || ''}
+          onChange={(e) => setSelectedGroupName(e.target.value)}
         >
           <option value="" disabled>Choose route…</option>
-          {routes.map((r) => (
-            <option key={r.route_id} value={r.route_id}>
-              {r.route_name}
+          {routeGroups.map((g) => (
+            <option key={g.displayName} value={g.displayName}>
+              {g.displayName}
             </option>
           ))}
         </select>
+        {selectedRouteId && routeGroups.find((g) => g.displayName === selectedGroupName)?.ids.length > 1 && (
+          <button
+            className="reverse-btn"
+            onClick={() => {
+              const group = routeGroups.find((g) => g.displayName === selectedGroupName);
+              const nextId = getOppositeDirectionId(group, selectedRouteId);
+              if (!nextId) return;
+              setSelectedRouteId(nextId);
+              setShapeLoading(true);
+              fetchRouteShape(nextId)
+                .then((shape) => setRouteShape(shape))
+                .catch((e) => console.error('Failed to reverse direction:', e))
+                .finally(() => setShapeLoading(false));
+            }}
+            aria-label="Reverse direction"
+          >
+            ⇄
+          </button>
+        )}
       </div>
 
       {/* Map — full screen hero */}
