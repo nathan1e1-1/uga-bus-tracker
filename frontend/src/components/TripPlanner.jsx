@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
-import { resolveDirectionByStops } from '../utils/routeGroups';
 
 export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, userLocation, nearestStop, onClose, onDirectionChange }) {
   const [fromStopId, setFromStopId] = useState('');
@@ -24,21 +23,25 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
   useEffect(() => {
     if (!fromStopId || !toStopId || !selectedRouteShape || !routes.length) return;
 
-    const currentGroup = routes.find((r) => r.route_id === selectedRouteId);
-    if (!currentGroup) return;
+    const currentRoute = routes.find((r) => r.route_id === selectedRouteId);
+    if (!currentRoute) return;
 
-    const group = {
-      displayName: currentGroup.route_name,
-      ids: routes
-        .filter((r) => r.route_name === currentGroup.route_name)
-        .map((r) => r.route_id),
-    };
-    if (group.ids.length < 2) return;
+    const groupIds = routes
+      .filter((r) => r.route_name === currentRoute.route_name)
+      .map((r) => r.route_id);
+    if (groupIds.length < 2) return;
 
-    const shapeMap = { [selectedRouteId]: selectedRouteShape };
-    const correctId = resolveDirectionByStops(group, shapeMap, fromStopId, toStopId);
-    if (correctId && correctId !== selectedRouteId && onDirectionChange) {
-      onDirectionChange(correctId);
+    const stops = selectedRouteShape.stops || [];
+    const fromIndex = stops.findIndex((s) => String(s.stop_id) === String(fromStopId));
+    const toIndex = stops.findIndex((s) => String(s.stop_id) === String(toStopId));
+
+    // Current direction is correct — no swap needed
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex < toIndex) return;
+
+    // Current direction is wrong; swap to the other direction in the group
+    const otherId = groupIds.find((id) => id !== selectedRouteId);
+    if (otherId && onDirectionChange) {
+      onDirectionChange(otherId);
     }
   }, [fromStopId, toStopId, selectedRouteShape, selectedRouteId, routes, onDirectionChange]);
 
