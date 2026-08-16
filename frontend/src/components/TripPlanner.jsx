@@ -19,9 +19,13 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
     }
   }, [useMyLocation, nearestStop]);
 
+  // Only the current shape is available here, so check stop order directly.
+  // resolveDirectionByStops expects shape maps for all group directions.
   // Detect wrong direction and request swap
   useEffect(() => {
-    if (!fromStopId || !toStopId || !selectedRouteShape || !routes.length) return;
+    if (!fromStopId || !toStopId || fromStopId === toStopId) return;
+    if (!selectedRouteShape || selectedRouteShape.route_id !== selectedRouteId) return;
+    if (!routes.length) return;
 
     const currentRoute = routes.find((r) => r.route_id === selectedRouteId);
     if (!currentRoute) return;
@@ -35,8 +39,8 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
     const fromIndex = stops.findIndex((s) => String(s.stop_id) === String(fromStopId));
     const toIndex = stops.findIndex((s) => String(s.stop_id) === String(toStopId));
 
-    // Current direction is correct — no swap needed
-    if (fromIndex !== -1 && toIndex !== -1 && fromIndex < toIndex) return;
+    // Current direction is correct or stops are missing — no swap needed
+    if (fromIndex === -1 || toIndex === -1 || fromIndex < toIndex) return;
 
     // Current direction is wrong; swap to the other direction in the group
     const otherId = groupIds.find((id) => id !== selectedRouteId);
