@@ -20,6 +20,7 @@ export default function App() {
   const [routeShape, setRouteShape] = useState(null);
   const [shapeLoading, setShapeLoading] = useState(false);
   const [showPlanner, setShowPlanner] = useState(false);
+  const [hasManualDirection, setHasManualDirection] = useState(false);
 
   const { buses, loading, error, lastUpdated } = useBusPolling(selectedRouteId);
   const { isDark, toggle } = useDarkMode();
@@ -50,7 +51,7 @@ export default function App() {
       .then((shapes) => {
         const shapeMap = Object.fromEntries(group.ids.map((id, i) => [id, shapes[i]]));
         let pickedId = group.ids[0];
-        if (group.ids.length > 1 && userLocation) {
+        if (group.ids.length > 1 && userLocation && !hasManualDirection) {
           const byLocation = resolveDirectionByLocation(group, shapeMap, userLocation);
           if (byLocation) pickedId = byLocation;
         }
@@ -59,7 +60,7 @@ export default function App() {
       })
       .catch((e) => console.error('Failed to load route shapes:', e))
       .finally(() => setShapeLoading(false));
-  }, [selectedGroupName, routeGroups, userLocation]);
+  }, [selectedGroupName, routeGroups, userLocation, hasManualDirection]);
 
   const selectedRoute = useMemo(
     () => routes.find((r) => r.route_id === selectedRouteId),
@@ -84,7 +85,10 @@ export default function App() {
         <select
           className="pill-select"
           value={selectedGroupName || ''}
-          onChange={(e) => setSelectedGroupName(e.target.value)}
+          onChange={(e) => {
+            setSelectedGroupName(e.target.value);
+            setHasManualDirection(false);
+          }}
         >
           <option value="" disabled>Choose route…</option>
           {routeGroups.map((g) => (
@@ -100,6 +104,7 @@ export default function App() {
               const group = routeGroups.find((g) => g.displayName === selectedGroupName);
               const nextId = getOppositeDirectionId(group, selectedRouteId);
               if (!nextId) return;
+              setHasManualDirection(true);
               setSelectedRouteId(nextId);
               setShapeLoading(true);
               fetchRouteShape(nextId)
