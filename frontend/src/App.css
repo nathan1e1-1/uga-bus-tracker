@@ -607,3 +607,23 @@ html, body, #root {
 .leaflet-control-attribution a {
   color: var(--map-attribution-text) !important;
 }
+
+.reverse-btn {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-left: 0.5rem;
+  transition: background 0.15s ease;
+}
+
+.reverse-btn:hover {
+  background: var(--surface-hover);
+}
