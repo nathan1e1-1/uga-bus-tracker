@@ -634,7 +634,11 @@ def main():
         print(f"  Dist-along-route: {r['dist_along']:.1f} m")
         if r['next_stop']:
             print(f"  Next Stop: {r['next_stop']} (pos {r['next_stop_pos']})")
-        print(f"  Speed: {r['speed']:.2f} m/s ({r['speed_source']})")
+        speed = r['speed']
+        if speed is not None:
+            print(f"  Speed: {speed:.2f} m/s ({r['speed_source']})")
+        else:
+            print(f"  Speed: N/A ({r['speed_source']})")
         print(f"  ETA: {r['eta_display']} ({r['eta_source']})")
 
     print("\n" + "=" * 70)
