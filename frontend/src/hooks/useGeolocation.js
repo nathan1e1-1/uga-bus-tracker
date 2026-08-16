@@ -48,7 +48,7 @@ export function useGeolocation() {
         });
         setError(null);
       },
-      (err) => {
+      () => {
         // Silent fail on watch errors
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }

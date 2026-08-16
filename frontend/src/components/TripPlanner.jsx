@@ -6,7 +6,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
   const [toStopId, setToStopId] = useState('');
   const [useMyLocation, setUseMyLocation] = useState(false);
 
-  const stops = selectedRouteShape?.stops || [];
+  const stops = useMemo(() => selectedRouteShape?.stops || [], [selectedRouteShape?.stops]);
   const routeName = selectedRouteShape?.route_name || 'Route';
   const routeColor = selectedRouteShape?.color || '#3B82F6';
 

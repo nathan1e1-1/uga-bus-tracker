@@ -64,11 +64,6 @@ export default function App() {
       .finally(() => setShapeLoading(false));
   }, [selectedGroupName, routeGroups, userLocation, hasManualDirection, selectedRouteId]);
 
-  const selectedRoute = useMemo(
-    () => routes.find((r) => r.route_id === selectedRouteId),
-    [routes, selectedRouteId]
-  );
-
   // Find nearest stop on the selected route
   const nearestStop = useMemo(() => {
     if (!userLocation || !routeShape?.stops?.length) return null;
