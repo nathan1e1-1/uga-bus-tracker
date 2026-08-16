@@ -51,7 +51,9 @@ export default function App() {
       .then((shapes) => {
         const shapeMap = Object.fromEntries(group.ids.map((id, i) => [id, shapes[i]]));
         let pickedId = group.ids[0];
-        if (group.ids.length > 1 && userLocation && !hasManualDirection) {
+        if (hasManualDirection && group.ids.includes(selectedRouteId)) {
+          pickedId = selectedRouteId;
+        } else if (group.ids.length > 1 && userLocation && !hasManualDirection) {
           const byLocation = resolveDirectionByLocation(group, shapeMap, userLocation);
           if (byLocation) pickedId = byLocation;
         }
@@ -60,7 +62,7 @@ export default function App() {
       })
       .catch((e) => console.error('Failed to load route shapes:', e))
       .finally(() => setShapeLoading(false));
-  }, [selectedGroupName, routeGroups, userLocation, hasManualDirection]);
+  }, [selectedGroupName, routeGroups, userLocation, hasManualDirection, selectedRouteId]);
 
   const selectedRoute = useMemo(
     () => routes.find((r) => r.route_id === selectedRouteId),
@@ -212,6 +214,10 @@ export default function App() {
           userLocation={userLocation}
           nearestStop={nearestStop}
           onClose={() => setShowPlanner(false)}
+          onDirectionChange={(nextId) => {
+            setSelectedRouteId(nextId);
+            setHasManualDirection(true);
+          }}
         />
       )}
     </div>

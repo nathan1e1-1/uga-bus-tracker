@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
+import { resolveDirectionByStops } from '../utils/routeGroups';
 
-export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, userLocation, nearestStop, onClose }) {
+export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, userLocation, nearestStop, onClose, onDirectionChange }) {
   const [fromStopId, setFromStopId] = useState('');
   const [toStopId, setToStopId] = useState('');
   const [useMyLocation, setUseMyLocation] = useState(false);
@@ -18,6 +19,28 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
       setFromStopId('');
     }
   }, [useMyLocation, nearestStop]);
+
+  // Detect wrong direction and request swap
+  useEffect(() => {
+    if (!fromStopId || !toStopId || !selectedRouteShape || !routes.length) return;
+
+    const currentGroup = routes.find((r) => r.route_id === selectedRouteId);
+    if (!currentGroup) return;
+
+    const group = {
+      displayName: currentGroup.route_name,
+      ids: routes
+        .filter((r) => r.route_name === currentGroup.route_name)
+        .map((r) => r.route_id),
+    };
+    if (group.ids.length < 2) return;
+
+    const shapeMap = { [selectedRouteId]: selectedRouteShape };
+    const correctId = resolveDirectionByStops(group, shapeMap, fromStopId, toStopId);
+    if (correctId && correctId !== selectedRouteId && onDirectionChange) {
+      onDirectionChange(correctId);
+    }
+  }, [fromStopId, toStopId, selectedRouteShape, selectedRouteId, routes, onDirectionChange]);
 
   // Build recommendations when both stops are selected
   const recommendations = useMemo(() => {
