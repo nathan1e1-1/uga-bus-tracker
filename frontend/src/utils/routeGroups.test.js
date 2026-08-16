@@ -30,6 +30,14 @@ describe('resolveDirectionByLocation', () => {
     const groups = { displayName: 'Weekender', ids: ['A'] };
     expect(resolveDirectionByLocation(groups, {}, { lat: 0, lng: 0 })).toBeNull();
   });
+
+  it('returns null if userLocation is missing', () => {
+    const group = { displayName: 'Weekender', ids: ['A'] };
+    const shapes = { A: { stops: [{ stop_id: 1, latitude: 0, longitude: 0 }] } };
+    expect(resolveDirectionByLocation(group, shapes, null)).toBeNull();
+    expect(resolveDirectionByLocation(group, shapes, undefined)).toBeNull();
+    expect(resolveDirectionByLocation(group, shapes, {})).toBeNull();
+  });
 });
 
 describe('resolveDirectionByStops', () => {

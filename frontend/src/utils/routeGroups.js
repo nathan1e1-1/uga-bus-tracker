@@ -24,6 +24,9 @@ export function groupRoutes(routes) {
 }
 
 export function resolveDirectionByLocation(group, shapes, userLocation) {
+  if (!userLocation || userLocation.lat == null || userLocation.lng == null) {
+    return null;
+  }
   let bestId = null;
   let bestDistance = Infinity;
   for (const id of group.ids) {
