@@ -1,19 +1,25 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { shouldRefit } from '../utils/mapFit';
 
 // UGA campus center
 const CAMPUS_CENTER = [33.9519, -83.3776];
 const DEFAULT_ZOOM = 14;
 
-function FitBounds({ bounds }) {
+function FitBounds({ bounds, routeId }) {
   const map = useMap();
+  const fittedRouteId = useRef(null);
+
   useEffect(() => {
-    if (bounds && bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    if (!bounds || bounds.length === 0) return;
+    if (!shouldRefit({ routeId: routeId ?? null, fittedRouteId: fittedRouteId.current, hasBounds: true })) {
+      return;
     }
-  }, [map, bounds]);
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    fittedRouteId.current = routeId ?? 'all';
+  }, [map, bounds, routeId]);
   return null;
 }
 
@@ -102,7 +108,7 @@ export default function BusMap({ routeShape, buses, isDark, userLocation, neares
             : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
           }
         />
-        <FitBounds bounds={bounds} />
+        <FitBounds bounds={bounds} routeId={routeShape?.route_id ?? null} />
 
         {/* Route polyline */}
         <Polyline
