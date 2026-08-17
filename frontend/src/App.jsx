@@ -21,6 +21,8 @@ export default function App() {
   const [shapeLoading, setShapeLoading] = useState(false);
   const [showPlanner, setShowPlanner] = useState(false);
   const [hasManualDirection, setHasManualDirection] = useState(false);
+  const [routesError, setRoutesError] = useState(null);
+  const [routesLoading, setRoutesLoading] = useState(true);
 
   const { buses, loading, error, lastUpdated } = useBusPolling(selectedRouteId);
   const { isDark, toggle } = useDarkMode();
@@ -28,13 +30,21 @@ export default function App() {
 
   // Load route list on mount
   useEffect(() => {
+    setRoutesLoading(true);
+    setRoutesError(null);
     fetchRoutes()
       .then((data) => {
+        console.log('[App] Loaded routes:', data.length);
         setRoutes(data);
         const groups = groupRoutes(data);
+        console.log('[App] Route groups:', groups.map((g) => `${g.displayName}(${g.ids.length})`).join(', '));
         setRouteGroups(groups);
       })
-      .catch((e) => console.error('Failed to load routes:', e));
+      .catch((e) => {
+        console.error('[App] Failed to load routes:', e);
+        setRoutesError(e.message || 'Failed to load routes');
+      })
+      .finally(() => setRoutesLoading(false));
   }, []);
 
   // Load route shape when selection changes
@@ -79,21 +89,27 @@ export default function App() {
           <span className="brand-text">UGA BUS</span>
         </div>
 
-        <select
-          className="pill-select"
-          value={selectedGroupName || ''}
-          onChange={(e) => {
-            setSelectedGroupName(e.target.value);
-            setHasManualDirection(false);
-          }}
-        >
-          <option value="" disabled>Choose route…</option>
-          {routeGroups.map((g) => (
-            <option key={g.displayName} value={g.displayName}>
-              {g.displayName}
-            </option>
-          ))}
-        </select>
+        {routesLoading ? (
+          <span className="pill-select" style={{ opacity: 0.6 }}>Loading routes…</span>
+        ) : routesError ? (
+          <span className="pill-select" style={{ color: '#EF4444' }}>Routes unavailable</span>
+        ) : (
+          <select
+            className="pill-select"
+            value={selectedGroupName || ''}
+            onChange={(e) => {
+              setSelectedGroupName(e.target.value);
+              setHasManualDirection(false);
+            }}
+          >
+            <option value="" disabled>Choose route…</option>
+            {routeGroups.map((g) => (
+              <option key={g.displayName} value={g.displayName}>
+                {g.displayName}
+              </option>
+            ))}
+          </select>
+        )}
         {selectedRouteId && routeGroups.find((g) => g.displayName === selectedGroupName)?.ids.length > 1 && (
           <button
             className="reverse-btn"

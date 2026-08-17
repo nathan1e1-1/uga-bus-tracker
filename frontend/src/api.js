@@ -8,11 +8,18 @@ function apiUrl(path) {
 
 async function getJson(path) {
   const url = apiUrl(path);
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  console.log(`[API] GET ${url}`);
+  try {
+    const res = await fetch(url);
+    console.log(`[API] Response ${res.status} for ${path}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    return await res.json();
+  } catch (e) {
+    console.error(`[API] Fetch failed for ${path}:`, e.message);
+    throw e;
   }
-  return res.json();
 }
 
 export function fetchRoutes() {
