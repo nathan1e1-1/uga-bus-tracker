@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
+import { buildRecommendations } from '../utils/recommendations';
 
 export default function TripPlanner({
   routes,
@@ -94,21 +95,7 @@ export default function TripPlanner({
     const toStop = allStops.find((s) => String(s.stop_id) === String(toStopId));
     if (!fromStop || !toStop) return [];
 
-    return matchingRoutes.map((route) => {
-      const routeBuses = liveBuses
-        .filter((b) => b.route_id === route.route_id && !b.is_stale)
-        .slice(0, 3);
-
-      return {
-        route_id: route.route_id,
-        route_name: route.route_name,
-        route_color: route.color,
-        from_stop: fromStop.name,
-        to_stop: toStop.name,
-        buses: routeBuses,
-        isSelected: route.isSelected,
-      };
-    });
+    return buildRecommendations({ fromStop, toStop, matchingRoutes, liveBuses });
   }, [fromStopId, toStopId, matchingRoutes, liveBuses, allStops]);
 
   // Calculate distance to each stop from user location
@@ -215,7 +202,15 @@ export default function TripPlanner({
                 <button
                   key={rec.route_id}
                   className="recommendation-card"
-                  style={{ borderLeftColor: rec.route_color, width: '100%', textAlign: 'left', background: 'var(--surface)' }}
+                  style={{
+                    borderLeftColor: rec.route_color,
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'var(--surface)',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    cursor: 'pointer',
+                  }}
                   onClick={() => {
                     if (onSelectRoute) {
                       onSelectRoute(rec.route_id);
@@ -223,20 +218,68 @@ export default function TripPlanner({
                     }
                   }}
                 >
-                  <div style={{ flex: 1 }}>
-                    <div className="rec-route-name">{rec.route_name}</div>
-                    <div className="rec-detail">
-                      {rec.from_stop} → {rec.to_stop}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      <div className="rec-route-name">{rec.route_name}</div>
+                      <div className="rec-detail">
+                        {rec.from_stop} → {rec.to_stop}
+                      </div>
                     </div>
-                  <div className="rec-detail">
-                    {rec.buses.length > 0
-                      ? `${rec.buses.length} active bus${rec.buses.length !== 1 ? 'es' : ''}`
-                      : 'No active buses right now'}
+                    {rec.isSelected && (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Selected</span>
+                    )}
                   </div>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {rec.buses.length === 0 ? (
+                      <div className="rec-detail">No active buses right now</div>
+                    ) : (
+                      rec.buses.map((bus) => (
+                        <div
+                          key={bus.bus_id}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+                        >
+                          <span className="rec-detail" style={{ marginTop: 0 }}>
+                            Bus {bus.bus_name} · → {bus.next_stop || 'Unknown'}
+                          </span>
+                          <span
+                            className="rec-eta"
+                            style={{
+                              marginLeft: 8,
+                              color:
+                                bus.eta_source === 'live'
+                                  ? '#10B981'
+                                  : bus.eta_source === 'arriving'
+                                    ? '#F59E0B'
+                                    : 'var(--text-secondary)',
+                              fontStyle:
+                                bus.eta_source === 'estimated' || bus.eta_source === 'unavailable'
+                                  ? 'italic'
+                                  : 'normal',
+                            }}
+                          >
+                            {bus.eta_display || 'Unavailable'}
+                            {bus.eta_source &&
+                              bus.eta_source !== 'live' &&
+                              bus.eta_source !== 'arriving' && (
+                                <span
+                                  style={{
+                                    fontSize: '0.6rem',
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.04em',
+                                    color: 'var(--text-muted)',
+                                    display: 'block',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {bus.eta_source}
+                                </span>
+                              )}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
-                  {rec.isSelected && (
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Selected</span>
-                  )}
                 </button>
               ))}
             </div>
