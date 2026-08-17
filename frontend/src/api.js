@@ -26,6 +26,10 @@ export function fetchRoutes() {
   return getJson('/routes');
 }
 
+export function fetchAllStops() {
+  return getJson('/stops');
+}
+
 export function fetchRouteShape(routeId) {
   return getJson(`/routes/${routeId}/shape`);
 }
@@ -37,7 +41,8 @@ export function fetchBuses(routeId) {
     return Promise.resolve([]);
   }
 
-  const url = apiUrl(`/routes/${routeId}/buses`);
+  const path = routeId ? `/routes/${routeId}/buses` : '/buses';
+  const url = apiUrl(path);
   console.log('[fetchBuses] Requesting:', url);
 
   return fetch(url)
@@ -57,4 +62,8 @@ export function fetchBuses(routeId) {
       console.error('[fetchBuses] Fetch failed:', e.message);
       return [];
     });
+}
+
+export function fetchAllBuses() {
+  return fetchBuses(null);
 }

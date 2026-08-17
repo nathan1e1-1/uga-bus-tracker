@@ -136,6 +136,27 @@ async def list_routes():
         })
     return routes
 
+@app.get("/stops")
+async def list_stops():
+    """Return all unique stops across all routes, with the routes that serve each stop."""
+    stops = {}
+    for rid, stop_list in stops_by_route.items():
+        for s in stop_list:
+            sid = str(s.get("stop_id", ""))
+            if not sid:
+                continue
+            if sid not in stops:
+                stops[sid] = {
+                    "stop_id": sid,
+                    "name": s.get("name"),
+                    "latitude": s.get("latitude"),
+                    "longitude": s.get("longitude"),
+                    "route_ids": [],
+                }
+            if rid not in stops[sid]["route_ids"]:
+                stops[sid]["route_ids"].append(rid)
+    return list(stops.values())
+
 @app.get("/routes/{route_id}/shape")
 async def get_route_shape(route_id: str):
     coords = route_shapes.get(route_id)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { fetchRoutes, fetchRouteShape } from './api';
+import { fetchRoutes, fetchAllStops, fetchRouteShape } from './api';
 import {
   groupRoutes,
   resolveDirectionByLocation,
@@ -23,12 +23,17 @@ export default function App() {
   const [hasManualDirection, setHasManualDirection] = useState(false);
   const [routesError, setRoutesError] = useState(null);
   const [routesLoading, setRoutesLoading] = useState(true);
+  const [allStops, setAllStops] = useState([]);
 
-  const { buses, loading, error, lastUpdated } = useBusPolling(selectedRouteId);
+  const { buses: allBuses, loading, error, lastUpdated } = useBusPolling(null);
+  const mapBuses = useMemo(
+    () => (selectedRouteId ? allBuses.filter((b) => b.route_id === selectedRouteId) : []),
+    [allBuses, selectedRouteId]
+  );
   const { isDark, toggle } = useDarkMode();
   const { location: userLocation, loading: geoLoading, requestLocation } = useGeolocation();
 
-  // Load route list on mount
+  // Load route list and all stops on mount
   useEffect(() => {
     setRoutesLoading(true);
     setRoutesError(null);
@@ -45,6 +50,15 @@ export default function App() {
         setRoutesError(e.message || 'Failed to load routes');
       })
       .finally(() => setRoutesLoading(false));
+
+    fetchAllStops()
+      .then((data) => {
+        console.log('[App] Loaded stops:', data.length);
+        setAllStops(data);
+      })
+      .catch((e) => {
+        console.error('[App] Failed to load stops:', e);
+      });
   }, []);
 
   // Load route shape when selection changes
@@ -139,7 +153,7 @@ export default function App() {
         ) : (
           <BusMap
             routeShape={routeShape}
-            buses={buses}
+            buses={mapBuses}
             isDark={isDark}
             userLocation={userLocation}
             nearestStop={nearestStop}
@@ -219,15 +233,25 @@ export default function App() {
       {showPlanner && (
         <TripPlanner
           routes={routes}
+          routeGroups={routeGroups}
+          allStops={allStops}
           selectedRouteId={selectedRouteId}
           selectedRouteShape={routeShape}
-          liveBuses={buses}
+          liveBuses={allBuses}
           userLocation={userLocation}
           nearestStop={nearestStop}
           onClose={() => setShowPlanner(false)}
           onDirectionChange={(nextId) => {
             setSelectedRouteId(nextId);
             setHasManualDirection(true);
+          }}
+          onSelectRoute={(routeId) => {
+            const group = routeGroups.find((g) => g.ids.includes(routeId));
+            if (group) {
+              setSelectedGroupName(group.displayName);
+              setSelectedRouteId(routeId);
+              setHasManualDirection(true);
+            }
           }}
         />
       )}

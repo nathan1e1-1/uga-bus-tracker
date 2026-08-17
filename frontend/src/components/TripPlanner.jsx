@@ -1,27 +1,64 @@
 import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
 
-export default function TripPlanner({ routes, selectedRouteId, selectedRouteShape, liveBuses, userLocation, nearestStop, onClose, onDirectionChange }) {
+export default function TripPlanner({
+  routes,
+  allStops,
+  selectedRouteId,
+  selectedRouteShape,
+  liveBuses,
+  userLocation,
+  onClose,
+  onDirectionChange,
+  onSelectRoute,
+}) {
   const [fromStopId, setFromStopId] = useState('');
   const [toStopId, setToStopId] = useState('');
   const [useMyLocation, setUseMyLocation] = useState(false);
 
-  const stops = useMemo(() => selectedRouteShape?.stops || [], [selectedRouteShape?.stops]);
-  const routeName = selectedRouteShape?.route_name || 'Route';
-  const routeColor = selectedRouteShape?.color || '#3B82F6';
+  // Global nearest stop for trip planner origin
+  const globalNearestStop = useMemo(() => {
+    if (!userLocation || !allStops.length) return null;
+    return allStops.reduce((best, s) => {
+      const d = haversineDistance(
+        userLocation.lat,
+        userLocation.lng,
+        s.latitude || s.lat,
+        s.longitude || s.lng
+      );
+      return !best || d < best.distance ? { ...s, distance: d } : best;
+    }, null);
+  }, [userLocation, allStops]);
 
   // Auto-set "from" stop when user location is available
   useEffect(() => {
-    if (useMyLocation && nearestStop) {
-      setFromStopId(String(nearestStop.stop_id));
+    if (useMyLocation && globalNearestStop) {
+      setFromStopId(String(globalNearestStop.stop_id));
     } else if (!useMyLocation) {
       setFromStopId('');
     }
-  }, [useMyLocation, nearestStop]);
+  }, [useMyLocation, globalNearestStop]);
 
-  // Only the current shape is available here, so check stop order directly.
-  // resolveDirectionByStops expects shape maps for all group directions.
-  // Detect wrong direction and request swap
+  // Find routes that serve both from and to stops
+  const matchingRoutes = useMemo(() => {
+    if (!fromStopId || !toStopId || fromStopId === toStopId || !allStops.length || !routes.length) {
+      return [];
+    }
+
+    const fromStop = allStops.find((s) => String(s.stop_id) === String(fromStopId));
+    const toStop = allStops.find((s) => String(s.stop_id) === String(toStopId));
+    if (!fromStop?.route_ids?.length || !toStop?.route_ids?.length) return [];
+
+    const commonRouteIds = fromStop.route_ids.filter((id) =>
+      toStop.route_ids.includes(id)
+    );
+
+    return routes
+      .filter((r) => commonRouteIds.includes(r.route_id))
+      .map((r) => ({ ...r, isSelected: r.route_id === selectedRouteId }));
+  }, [fromStopId, toStopId, allStops, routes, selectedRouteId]);
+
+  // Direction-swap effect for the currently selected route
   useEffect(() => {
     if (!fromStopId || !toStopId || fromStopId === toStopId) return;
     if (!selectedRouteShape || selectedRouteShape.route_id !== selectedRouteId) return;
@@ -49,46 +86,35 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
     }
   }, [fromStopId, toStopId, selectedRouteShape, selectedRouteId, routes, onDirectionChange]);
 
-  // Build recommendations when both stops are selected
+  // Build recommendations from matching routes and live buses
   const recommendations = useMemo(() => {
-    if (!fromStopId || !toStopId || fromStopId === toStopId) return [];
+    if (!fromStopId || !toStopId || fromStopId === toStopId || !matchingRoutes.length) return [];
 
-    const fromStop = stops.find((s) => String(s.stop_id) === fromStopId);
-    const toStop = stops.find((s) => String(s.stop_id) === toStopId);
+    const fromStop = allStops.find((s) => String(s.stop_id) === String(fromStopId));
+    const toStop = allStops.find((s) => String(s.stop_id) === String(toStopId));
     if (!fromStop || !toStop) return [];
 
-    // For each live bus, calculate ETA to the FROM stop
-    const busesToFrom = liveBuses
-      .filter((b) => !b.is_stale && b.eta_seconds != null)
-      .map((b) => ({
-        bus_id: b.bus_id,
-        bus_name: b.bus_name,
-        eta_seconds: b.eta_seconds,
-        eta_display: b.eta_display,
-        next_stop: b.next_stop,
-        next_stop_pos: b.next_stop_pos,
-        eta_source: b.eta_source,
-      }))
-      .sort((a, b) => a.eta_seconds - b.eta_seconds);
+    return matchingRoutes.map((route) => {
+      const routeBuses = liveBuses
+        .filter((b) => b.route_id === route.route_id && !b.is_stale)
+        .slice(0, 3);
 
-    if (busesToFrom.length === 0) return [];
-
-    return [
-      {
-        route_id: selectedRouteId,
-        route_name: routeName,
-        route_color: routeColor,
+      return {
+        route_id: route.route_id,
+        route_name: route.route_name,
+        route_color: route.color,
         from_stop: fromStop.name,
         to_stop: toStop.name,
-        buses: busesToFrom.slice(0, 3),
-      },
-    ];
-  }, [fromStopId, toStopId, stops, liveBuses, selectedRouteId, routeName, routeColor]);
+        buses: routeBuses,
+        isSelected: route.isSelected,
+      };
+    });
+  }, [fromStopId, toStopId, matchingRoutes, liveBuses, allStops]);
 
   // Calculate distance to each stop from user location
   const stopsWithDistance = useMemo(() => {
-    if (!userLocation) return stops.map(s => ({ ...s, distance: null }));
-    return stops.map((s) => ({
+    if (!userLocation) return allStops.map((s) => ({ ...s, distance: null }));
+    return allStops.map((s) => ({
       ...s,
       distance: haversineDistance(
         userLocation.lat,
@@ -97,7 +123,16 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
         s.longitude || s.lng
       ),
     }));
-  }, [stops, userLocation]);
+  }, [allStops, userLocation]);
+
+  const sortedStops = useMemo(() => {
+    return [...stopsWithDistance].sort((a, b) => {
+      if (a.distance == null && b.distance == null) return a.name.localeCompare(b.name);
+      if (a.distance == null) return 1;
+      if (b.distance == null) return -1;
+      return a.distance - b.distance;
+    });
+  }, [stopsWithDistance]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -122,9 +157,9 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
                 />
                 Use my current location
               </label>
-              {useMyLocation && nearestStop && (
+              {useMyLocation && globalNearestStop && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  Nearest stop: <strong style={{ color: 'var(--text-primary)' }}>{nearestStop.name}</strong> ({Math.round(nearestStop.distance)}m away)
+                  Nearest stop: <strong style={{ color: 'var(--text-primary)' }}>{globalNearestStop.name}</strong> ({Math.round(globalNearestStop.distance)}m away)
                 </div>
               )}
             </div>
@@ -134,7 +169,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
             <label className="field-label">From</label>
             {useMyLocation ? (
               <div className="stop-select" style={{ background: 'var(--surface-hover)', cursor: 'default' }}>
-                {nearestStop ? nearestStop.name : 'Getting location...'}
+                {globalNearestStop ? globalNearestStop.name : 'Getting location...'}
               </div>
             ) : (
               <select
@@ -143,7 +178,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
                 onChange={(e) => setFromStopId(e.target.value)}
               >
                 <option value="" disabled>Pick your stop…</option>
-                {stopsWithDistance.map((s) => (
+                {sortedStops.map((s) => (
                   <option key={s.stop_id} value={String(s.stop_id)}>
                     {s.name} {s.distance != null ? `(${Math.round(s.distance)}m)` : ''}
                   </option>
@@ -160,7 +195,7 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
               onChange={(e) => setToStopId(e.target.value)}
             >
               <option value="" disabled>Pick destination…</option>
-              {stopsWithDistance.map((s) => (
+              {sortedStops.map((s) => (
                 <option key={s.stop_id} value={String(s.stop_id)}>
                   {s.name}
                 </option>
@@ -177,76 +212,41 @@ export default function TripPlanner({ routes, selectedRouteId, selectedRouteShap
           {recommendations.length > 0 && (
             <div className="recommendation-list">
               {recommendations.map((rec) => (
-                <div key={rec.route_id}>
-                  <div
-                    style={{
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: 'var(--text-secondary)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      marginBottom: '0.5rem',
-                    }}
-                  >
-                    {rec.from_stop} → {rec.to_stop}
-                  </div>
-
-                  {rec.buses.map((bus) => (
-                    <div
-                      key={bus.bus_id}
-                      className="recommendation-card"
-                      style={{ borderLeftColor: rec.route_color }}
-                    >
-                      <div>
-                        <div className="rec-route-name">{rec.route_name}</div>
-                        <div className="rec-detail">
-                          Bus {bus.bus_name} · Next: {bus.next_stop || 'Unknown'}
-                        </div>
-                      </div>
-                      <div
-                        className="rec-eta"
-                        style={{
-                          color:
-                            bus.eta_source === 'live'
-                              ? '#10B981'
-                              : bus.eta_source === 'arriving'
-                                ? '#F59E0B'
-                                : 'var(--text-secondary)',
-                          fontStyle:
-                            bus.eta_source === 'estimated' || bus.eta_source === 'default'
-                              ? 'italic'
-                              : 'normal',
-                        }}
-                      >
-                        {bus.eta_display}
-                        {bus.eta_source !== 'live' && (
-                          <div
-                            style={{
-                              fontSize: '0.6rem',
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              color: 'var(--text-muted)',
-                              textAlign: 'right',
-                              marginTop: 2,
-                            }}
-                          >
-                            {bus.eta_source}
-                          </div>
-                        )}
-                      </div>
+                <button
+                  key={rec.route_id}
+                  className="recommendation-card"
+                  style={{ borderLeftColor: rec.route_color, width: '100%', textAlign: 'left', background: 'var(--surface)' }}
+                  onClick={() => {
+                    if (onSelectRoute) {
+                      onSelectRoute(rec.route_id);
+                      onClose();
+                    }
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div className="rec-route-name">{rec.route_name}</div>
+                    <div className="rec-detail">
+                      {rec.from_stop} → {rec.to_stop}
                     </div>
-                  ))}
-                </div>
+                  <div className="rec-detail">
+                    {rec.buses.length > 0
+                      ? `${rec.buses.length} active bus${rec.buses.length !== 1 ? 'es' : ''}`
+                      : 'No active buses right now'}
+                  </div>
+                  </div>
+                  {rec.isSelected && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Selected</span>
+                  )}
+                </button>
               ))}
             </div>
           )}
 
-          {fromStopId && toStopId && fromStopId !== toStopId && recommendations.length === 0 && (
+          {fromStopId && toStopId && fromStopId !== toStopId && matchingRoutes.length === 0 && (
             <div className="no-results">
-              No active buses on this route right now.
+              No direct route serves these stops.
               <br />
-              <small>Check back during service hours.</small>
+              <small>Try a different origin or destination.</small>
             </div>
           )}
         </div>
