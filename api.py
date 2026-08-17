@@ -14,6 +14,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 
+import route_shapes as shapes
+
 # Config
 UGA_SYSTEM_ID = 3994
 BASE_URL = "https://passiogo.com"
@@ -51,33 +53,33 @@ def load_routes():
         print("[startup] No route cache found!")
 
 async def poll_buses():
-    """Poll Passio GO for live bus positions."""
+    """Poll Passio GO and enrich each bus with route-projected ETA/next-stop."""
     global bus_cache, last_poll_time
     try:
-        url = f"{BASE_URL}/mapGetData.php?getBuses=2"
-        resp = requests.post(url, json={"s0": str(UGA_SYSTEM_ID), "sA": 1}, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        buses = data.get("buses", {})
+        results, history = shapes.poll_and_compute()
+        now = datetime.now(timezone.utc)
         bus_cache = {}
-        for vid, vlist in buses.items():
-            if vid == "-1" or not vlist:
-                continue
-            v = vlist[0]
-            bus_cache[str(v.get('id', vid))] = {
-                "bus_id": str(v.get('id', vid)),
-                "bus_name": v.get('name', 'Unknown'),
-                "route_id": str(v.get('routeId', '')),
-                "lat": float(v.get('latitude', 0)),
-                "lon": float(v.get('longitude', 0)),
-                "heading": v.get('calculatedCourse', v.get('course', 0)),
-                "speed": float(v.get('speed', 0)),
-                "timestamp": v.get('timestamp', datetime.now(timezone.utc).isoformat()),
+        for r in results:
+            bus_cache[r["bus_id"]] = {
+                "bus_id": r["bus_id"],
+                "bus_name": r.get("bus_name") or "Unknown",
+                "route_id": r["route_id"],
+                "lat": r["lat"],
+                "lon": r["lon"],
+                "heading": None,
+                "speed": r.get("speed"),
+                "speed_source": r.get("speed_source"),
+                "next_stop": r.get("next_stop"),
+                "next_stop_pos": r.get("next_stop_pos"),
+                "eta_seconds": r.get("eta_seconds"),
+                "eta_source": r.get("eta_source"),
+                "eta_display": r.get("eta_display"),
+                "timestamp": now.isoformat(),
                 "is_stale": False,
             }
-        last_poll_time = datetime.now(timezone.utc)
-        print(f"[poll] {len(bus_cache)} buses active")
+        shapes.save_history(history)
+        last_poll_time = now
+        print(f"[poll] {len(bus_cache)} buses active (ETA enriched)")
     except Exception as e:
         print(f"[poll] ERROR: {e}")
 
