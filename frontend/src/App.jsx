@@ -1,13 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { fetchRoutes, fetchAllStops, fetchRouteShape } from './api';
-import {
-  groupRoutes,
-  resolveDirectionByLocation,
-  getOppositeDirectionId,
-} from './utils/routeGroups';
+import { fetchRoutes, fetchAllStops } from './api';
+import { groupRoutes, getOppositeDirectionId } from './utils/routeGroups';
 import { useBusPolling } from './hooks/useBusPolling';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useGeolocation, findNearestStop } from './hooks/useGeolocation';
+import { useRouteShapes } from './hooks/useRouteShapes';
 import BusMap from './components/BusMap';
 import TripPlanner from './components/TripPlanner';
 import './App.css';
@@ -17,8 +14,6 @@ export default function App() {
   const [routeGroups, setRouteGroups] = useState([]);
   const [selectedGroupName, setSelectedGroupName] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
-  const [routeShape, setRouteShape] = useState(null);
-  const [shapeLoading, setShapeLoading] = useState(false);
   const [showPlanner, setShowPlanner] = useState(false);
   const [hasManualDirection, setHasManualDirection] = useState(false);
   const [routesError, setRoutesError] = useState(null);
@@ -32,6 +27,15 @@ export default function App() {
   );
   const { isDark, toggle } = useDarkMode();
   const { location: userLocation, loading: geoLoading, requestLocation } = useGeolocation();
+
+  const { routeShape } = useRouteShapes({
+    selectedGroupName,
+    routeGroups,
+    userLocation,
+    hasManualDirection,
+    selectedRouteId,
+    onPicked: (id) => setSelectedRouteId(id),
+  });
 
   // Load route list and all stops on mount
   useEffect(() => {
@@ -60,33 +64,6 @@ export default function App() {
         console.error('[App] Failed to load stops:', e);
       });
   }, []);
-
-  // Load route shape when selection changes
-  useEffect(() => {
-    if (!selectedGroupName) {
-      setRouteShape(null);
-      return;
-    }
-    const group = routeGroups.find((g) => g.displayName === selectedGroupName);
-    if (!group) return;
-
-    setShapeLoading(true);
-    Promise.all(group.ids.map((id) => fetchRouteShape(id)))
-      .then((shapes) => {
-        const shapeMap = Object.fromEntries(group.ids.map((id, i) => [id, shapes[i]]));
-        let pickedId = group.ids[0];
-        if (hasManualDirection && group.ids.includes(selectedRouteId)) {
-          pickedId = selectedRouteId;
-        } else if (group.ids.length > 1 && userLocation && !hasManualDirection) {
-          const byLocation = resolveDirectionByLocation(group, shapeMap, userLocation);
-          if (byLocation) pickedId = byLocation;
-        }
-        setSelectedRouteId(pickedId);
-        setRouteShape(shapeMap[pickedId]);
-      })
-      .catch((e) => console.error('Failed to load route shapes:', e))
-      .finally(() => setShapeLoading(false));
-  }, [selectedGroupName, routeGroups, userLocation, hasManualDirection, selectedRouteId]);
 
   // Find nearest stop on the selected route
   const nearestStop = useMemo(() => {
@@ -133,11 +110,6 @@ export default function App() {
               if (!nextId) return;
               setHasManualDirection(true);
               setSelectedRouteId(nextId);
-              setShapeLoading(true);
-              fetchRouteShape(nextId)
-                .then((shape) => setRouteShape(shape))
-                .catch((e) => console.error('Failed to reverse direction:', e))
-                .finally(() => setShapeLoading(false));
             }}
             aria-label="Reverse direction"
           >
@@ -148,17 +120,13 @@ export default function App() {
 
       {/* Map — full screen hero */}
       <main className="map-container">
-        {shapeLoading ? (
-          <div className="map-wrapper" style={{ background: '#0F172A' }} />
-        ) : (
-          <BusMap
-            routeShape={routeShape}
-            buses={mapBuses}
-            isDark={isDark}
-            userLocation={userLocation}
-            nearestStop={nearestStop}
-          />
-        )}
+        <BusMap
+          routeShape={routeShape}
+          buses={mapBuses}
+          isDark={isDark}
+          userLocation={userLocation}
+          nearestStop={nearestStop}
+        />
       </main>
 
       {/* Bottom bar: controls left */}
