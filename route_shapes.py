@@ -46,6 +46,7 @@ ROUTE_CACHE_TTL_SECONDS = 86400          # refresh shapes once a day
 HISTORY_TTL_SECONDS = 1800               # keep 30 min of position fixes
 MIN_TIME_DELTA = 10                      # minimum seconds between fixes for speed
 MAX_IMPLAUSIBLE_SPEED_MPS = 20.0         # 45 mph — generous but realistic for a campus shuttle
+REFRESH_RETRY_INTERVAL_SECONDS = 600     # backoff before retrying a failed Passio refresh
 
 # Speed / ETA behaviour
 SPEED_WINDOW = 4                         # fixes to average over for live speed
@@ -53,6 +54,9 @@ WIDER_WINDOW = 8                         # fixes to scan for pre-stop speed
 STOPPED_SPEED_MPS = 1.0                  # below this = "stopped"
 DEFAULT_MOVING_SPEED_MPS = 4.0           # ~9 mph — typical campus shuttle cruise
 ARRIVAL_THRESHOLD_M = 25.0               # within this = "Arriving"
+
+# Timestamp of the last route-cache refresh attempt (for backoff throttling).
+last_refresh_attempt = None
 
 # ---------------------------------------------------------------------------
 # Geo helpers
@@ -189,7 +193,13 @@ def load_or_fetch_routes(force_refresh=False):
     """
     Load cached route data if fresh; otherwise fetch from Passio GO.
     Falls back to stale cache if the live fetch fails.
+
+    Refresh attempts are throttled so a failing Passio GO refresh (e.g. a
+    rate limit) is retried at most once per REFRESH_RETRY_INTERVAL_SECONDS,
+    instead of on every poll cycle.
     """
+    global last_refresh_attempt
+
     cache = None
     status = "missing"
 
@@ -208,8 +218,18 @@ def load_or_fetch_routes(force_refresh=False):
         print("Using cached route data (refresh if >24h old).")
         return _extract_from_cache(cache)
 
+    # Backoff: if the last refresh attempt was recent, serve the stale cache
+    # rather than hammering Passio GO every poll.
+    now = datetime.now(timezone.utc)
+    last = last_refresh_attempt
+    if (not force_refresh and cache is not None and last is not None and
+            (now - last).total_seconds() < REFRESH_RETRY_INTERVAL_SECONDS):
+        print("Route cache refresh throttled — using cached route data.")
+        return _extract_from_cache(cache)
+
     print("Route cache stale or missing — fetching from Passio GO...")
     try:
+        last_refresh_attempt = now
         return _fetch_and_build_cache()
     except Exception as e:
         print(f"ERROR fetching route data: {e}")
