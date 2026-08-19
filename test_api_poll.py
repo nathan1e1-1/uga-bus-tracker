@@ -60,6 +60,13 @@ class TestApiPollEnrichment(unittest.TestCase):
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
+
+        # Save originals so tearDown can restore them (no cross-test leakage).
+        self._orig_history = route_shapes.HISTORY_FILE
+        self._orig_load = route_shapes.load_or_fetch_routes
+        self._orig_fetch_vehicles = route_shapes.fetch_vehicles
+        self._orig_requests_post = api.requests.post
+
         route_shapes.HISTORY_FILE = os.path.join(self._tmp.name, "bus_history.json")
 
         # Hermetic mocks: no network calls.
@@ -70,6 +77,10 @@ class TestApiPollEnrichment(unittest.TestCase):
         )
 
     def tearDown(self):
+        route_shapes.HISTORY_FILE = self._orig_history
+        route_shapes.load_or_fetch_routes = self._orig_load
+        route_shapes.fetch_vehicles = self._orig_fetch_vehicles
+        api.requests.post = self._orig_requests_post
         self._tmp.cleanup()
 
     def test_poll_buses_enriches_with_eta_next_stop_and_name(self):
