@@ -94,6 +94,25 @@ class TestApiPollEnrichment(unittest.TestCase):
         self.assertAlmostEqual(bus["lon"], -83.3968)
         self.assertFalse(bus["is_stale"])
 
+    def test_poll_buses_includes_etas_for_every_stop(self):
+        # 2nd poll provides speed history so ETAs become computable
+        asyncio.run(api.poll_buses())
+        asyncio.run(api.poll_buses())
+        bus = api.bus_cache["101"]
+
+        self.assertIn("etas", bus)
+        self.assertEqual(sorted(bus["etas"].keys()), ["S1", "S2", "S3"])
+        for entry in bus["etas"].values():
+            self.assertIn("eta_seconds", entry)
+            self.assertIn("eta_display", entry)
+            self.assertIn("eta_source", entry)
+
+        # The nearest stop ahead (Stop B) should have the smallest ETA.
+        etas = bus["etas"]
+        self.assertIsNotNone(etas["S2"]["eta_seconds"])
+        sorted_ids = [sid for sid, _ in sorted(etas.items(), key=lambda kv: kv[1]["eta_seconds"] or 0)]
+        self.assertEqual(sorted_ids[0], "S2")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

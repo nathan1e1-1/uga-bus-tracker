@@ -1,28 +1,31 @@
-// Builds "Where to?" recommendations: for each route that serves both the
-// origin and destination stops, list the live buses on that route with their
-// name, next stop, and ETA so the user can see which bus to take.
-export function buildRecommendations({ fromStop, toStop, matchingRoutes, liveBuses, limit = 4 }) {
-  return matchingRoutes.map((route) => {
-    const buses = liveBuses
-      .filter((b) => b.route_id === route.route_id && !b.is_stale)
-      .slice(0, limit)
-      .map((b) => ({
+// Builds the "Where to?" leaderboard: the buses — across every matching route —
+// that will arrive at the origin stop soonest, sorted by ETA to that stop.
+export function buildRecommendations({ fromStop, toStop, matchingRoutes, liveBuses, limit = 3 }) {
+  const routeById = Object.fromEntries(matchingRoutes.map((r) => [r.route_id, r]));
+  const originKey = String(fromStop.stop_id);
+
+  return liveBuses
+    .filter((b) => !b.is_stale && routeById[b.route_id])
+    .map((b) => {
+      const eta = b.etas?.[originKey];
+      if (!eta || eta.eta_seconds == null) return null;
+      const route = routeById[b.route_id];
+      return {
         bus_id: b.bus_id,
         bus_name: b.bus_name,
+        route_id: b.route_id,
+        route_name: route.route_name,
+        route_color: route.color,
+        from_stop: fromStop.name,
+        to_stop: toStop.name,
         next_stop: b.next_stop,
-        eta_display: b.eta_display,
-        eta_source: b.eta_source,
-        eta_seconds: b.eta_seconds,
-      }));
-
-    return {
-      route_id: route.route_id,
-      route_name: route.route_name,
-      route_color: route.color,
-      from_stop: fromStop.name,
-      to_stop: toStop.name,
-      buses,
-      isSelected: route.isSelected,
-    };
-  });
+        eta_seconds: eta.eta_seconds,
+        eta_display: eta.eta_display,
+        eta_source: eta.eta_source,
+        isSelected: route.isSelected === true,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.eta_seconds - b.eta_seconds)
+    .slice(0, limit);
 }

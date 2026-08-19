@@ -74,6 +74,7 @@ async def poll_buses():
                 "eta_seconds": r.get("eta_seconds"),
                 "eta_source": r.get("eta_source"),
                 "eta_display": r.get("eta_display"),
+                "etas": r.get("etas", {}),
                 "timestamp": now.isoformat(),
                 "is_stale": False,
             }

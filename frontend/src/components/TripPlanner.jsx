@@ -200,15 +200,13 @@ export default function TripPlanner({
             <div className="recommendation-list">
               {recommendations.map((rec) => (
                 <button
-                  key={rec.route_id}
+                  key={rec.bus_id}
                   className="recommendation-card"
                   style={{
                     borderLeftColor: rec.route_color,
                     width: '100%',
                     textAlign: 'left',
                     background: 'var(--surface)',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
                     cursor: 'pointer',
                   }}
                   onClick={() => {
@@ -218,70 +216,62 @@ export default function TripPlanner({
                     }
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <div>
-                      <div className="rec-route-name">{rec.route_name}</div>
-                      <div className="rec-detail">
-                        {rec.from_stop} → {rec.to_stop}
-                      </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="rec-route-name">
+                      Bus {rec.bus_name} · {rec.route_name}
                     </div>
-                    {rec.isSelected && (
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Selected</span>
+                    <div className="rec-detail">
+                      {rec.from_stop} → {rec.to_stop}
+                    </div>
+                    {rec.next_stop && (
+                      <div className="rec-detail">Next: {rec.next_stop}</div>
                     )}
                   </div>
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {rec.buses.length === 0 ? (
-                      <div className="rec-detail">No active buses right now</div>
-                    ) : (
-                      rec.buses.map((bus) => (
+                  <div style={{ textAlign: 'right' }}>
+                    <div
+                      className="rec-eta"
+                      style={{
+                        color:
+                          rec.eta_source === 'live'
+                            ? '#10B981'
+                            : rec.eta_source === 'arriving'
+                              ? '#F59E0B'
+                              : 'var(--text-secondary)',
+                        fontStyle:
+                          rec.eta_source === 'estimated' || rec.eta_source === 'unavailable'
+                            ? 'italic'
+                            : 'normal',
+                      }}
+                    >
+                      {rec.eta_display || 'Unavailable'}
+                    </div>
+                    {rec.eta_source &&
+                      rec.eta_source !== 'live' &&
+                      rec.eta_source !== 'arriving' && (
                         <div
-                          key={bus.bus_id}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+                          style={{
+                            fontSize: '0.6rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: 'var(--text-muted)',
+                            marginTop: 2,
+                          }}
                         >
-                          <span className="rec-detail" style={{ marginTop: 0 }}>
-                            Bus {bus.bus_name} · → {bus.next_stop || 'Unknown'}
-                          </span>
-                          <span
-                            className="rec-eta"
-                            style={{
-                              marginLeft: 8,
-                              color:
-                                bus.eta_source === 'live'
-                                  ? '#10B981'
-                                  : bus.eta_source === 'arriving'
-                                    ? '#F59E0B'
-                                    : 'var(--text-secondary)',
-                              fontStyle:
-                                bus.eta_source === 'estimated' || bus.eta_source === 'unavailable'
-                                  ? 'italic'
-                                  : 'normal',
-                            }}
-                          >
-                            {bus.eta_display || 'Unavailable'}
-                            {bus.eta_source &&
-                              bus.eta_source !== 'live' &&
-                              bus.eta_source !== 'arriving' && (
-                                <span
-                                  style={{
-                                    fontSize: '0.6rem',
-                                    fontWeight: 600,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.04em',
-                                    color: 'var(--text-muted)',
-                                    display: 'block',
-                                    textAlign: 'right',
-                                  }}
-                                >
-                                  {bus.eta_source}
-                                </span>
-                              )}
-                          </span>
+                          {rec.eta_source}
                         </div>
-                      ))
-                    )}
+                      )}
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {fromStopId && toStopId && fromStopId !== toStopId && matchingRoutes.length > 0 && recommendations.length === 0 && (
+            <div className="no-results">
+              No active buses right now.
+              <br />
+              <small>Check back during service hours.</small>
             </div>
           )}
 

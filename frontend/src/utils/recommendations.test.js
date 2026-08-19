@@ -10,42 +10,49 @@ const fromStop = { stop_id: '1', name: 'Crescent A' };
 const toStop = { stop_id: '2', name: 'East Campus Village' };
 
 const liveBuses = [
-  { bus_id: 'b1', bus_name: '96316', route_id: '44886', is_stale: false, next_stop: 'Crescent A', eta_display: '4 min', eta_source: 'live', eta_seconds: 240 },
-  { bus_id: 'b2', bus_name: '12345', route_id: '44886', is_stale: false, next_stop: 'Mell Hall', eta_display: '10 min', eta_source: 'estimated', eta_seconds: 600 },
-  { bus_id: 'b3', bus_name: '22222', route_id: '44886', is_stale: true, next_stop: 'Lot E01', eta_display: '2 min', eta_source: 'live', eta_seconds: 120 },
-  { bus_id: 'b4', bus_name: '77777', route_id: '73972', is_stale: false, next_stop: 'West Campus', eta_display: '8 min', eta_source: 'live', eta_seconds: 480 },
+  { bus_id: 'b1', bus_name: '96316', route_id: '44886', is_stale: false, next_stop: 'Crescent A', etas: { '1': { eta_seconds: 240, eta_display: '4 min', eta_source: 'live' } } },
+  { bus_id: 'b2', bus_name: '12345', route_id: '44886', is_stale: false, next_stop: 'Mell Hall', etas: { '1': { eta_seconds: 600, eta_display: '10 min', eta_source: 'estimated' } } },
+  { bus_id: 'b3', bus_name: '22222', route_id: '44886', is_stale: true, next_stop: 'Lot E01', etas: { '1': { eta_seconds: 120, eta_display: '2 min', eta_source: 'live' } } },
+  { bus_id: 'b4', bus_name: '77777', route_id: '73972', is_stale: false, next_stop: 'West Campus', etas: { '1': { eta_seconds: 480, eta_display: '8 min', eta_source: 'live' } } },
+  { bus_id: 'b5', bus_name: '55555', route_id: '44886', is_stale: false, next_stop: 'Mell Hall', etas: { '999': { eta_seconds: 60, eta_display: '1 min', eta_source: 'live' } } },
 ];
 
 describe('buildRecommendations', () => {
-  it('lists the actual buses on each matching route with their info', () => {
+  it('returns a flat top-3 list sorted by ETA to the origin stop', () => {
     const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses });
+    expect(recs).toHaveLength(3);
+    expect(recs.map((r) => r.bus_id)).toEqual(['b1', 'b4', 'b2']);
+  });
 
-    const centralEast = recs.find((r) => r.route_id === '44886');
-    expect(centralEast).toBeTruthy();
-    expect(centralEast.buses).toHaveLength(2);
-    expect(centralEast.buses[0]).toMatchObject({
+  it('excludes stale buses and buses with no ETA to the origin stop', () => {
+    const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses });
+    const ids = recs.map((r) => r.bus_id);
+    expect(ids).not.toContain('b3');
+    expect(ids).not.toContain('b5');
+  });
+
+  it('includes route and stop info for display', () => {
+    const [top] = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses });
+    expect(top).toMatchObject({
+      bus_id: 'b1',
       bus_name: '96316',
-      next_stop: 'Crescent A',
+      route_id: '44886',
+      route_name: 'Central East',
+      route_color: '#075CFF',
+      from_stop: 'Crescent A',
+      to_stop: 'East Campus Village',
       eta_display: '4 min',
       eta_source: 'live',
     });
-
-    const weekender = recs.find((r) => r.route_id === '73972');
-    expect(weekender.buses[0]).toMatchObject({ bus_name: '77777', eta_display: '8 min' });
   });
 
-  it('excludes stale buses from the candidate list', () => {
-    const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses });
-    const centralEast = recs.find((r) => r.route_id === '44886');
-    expect(centralEast.buses.every((b) => b.bus_id !== 'b3')).toBe(true);
+  it('limits results to the requested count', () => {
+    const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses, limit: 2 });
+    expect(recs).toHaveLength(2);
   });
 
-  it('limits buses per route', () => {
-    const manyBuses = Array.from({ length: 6 }, (_, i) => ({
-      bus_id: `x${i}`, bus_name: `B${i}`, route_id: '44886', is_stale: false,
-      next_stop: 'Crescent A', eta_display: '3 min', eta_source: 'live', eta_seconds: 180,
-    }));
-    const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses: manyBuses, limit: 3 });
-    expect(recs[0].buses).toHaveLength(3);
+  it('returns fewer when fewer buses qualify', () => {
+    const recs = buildRecommendations({ fromStop, toStop, matchingRoutes: routes, liveBuses: [liveBuses[0]] });
+    expect(recs).toHaveLength(1);
   });
 });

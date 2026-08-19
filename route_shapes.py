@@ -602,6 +602,24 @@ def poll_and_compute(force_refresh=False):
 
         eta_str, _ = format_eta(eta_seconds, eta_minutes, eta_source)
 
+        # ETAs to EVERY stop on the route (drives the "Where to?" leaderboard)
+        etas = {}
+        for stop in stops_by_route.get(rid, []):
+            _, _, _, _, s_dist = find_closest_point_on_route(
+                stop["latitude"], stop["longitude"], coords, cum, total
+            )
+            forward = (s_dist - v_dist_along) % total
+            if speed_mps is None or speed_mps <= 0.1:
+                e_sec, e_min, e_src = None, None, "unavailable"
+            else:
+                e_sec, e_min, e_src = compute_eta(forward, speed_mps, speed_source)
+            e_str, _ = format_eta(e_sec, e_min, e_src)
+            etas[str(stop["stop_id"])] = {
+                "eta_seconds": e_sec,
+                "eta_display": e_str,
+                "eta_source": e_src,
+            }
+
         results.append({
             "bus_id": bus["bus_id"],
             "route_id": rid,
@@ -616,6 +634,7 @@ def poll_and_compute(force_refresh=False):
             "eta_seconds": eta_seconds,
             "eta_source": eta_source,
             "eta_display": eta_str,
+            "etas": etas,
         })
 
     return results, history
