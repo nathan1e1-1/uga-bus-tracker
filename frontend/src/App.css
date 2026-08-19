@@ -627,3 +627,45 @@ html, body, #root {
 .reverse-btn:hover {
   background: var(--surface-hover);
 }
+
+/* === PWA Update Prompt === */
+.update-prompt {
+  position: fixed;
+  bottom: 5.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.6rem 0.75rem 0.6rem 1.25rem;
+  box-shadow: var(--shadow-lg);
+  font-size: 0.8rem;
+  animation: update-pop 0.25s ease-out;
+}
+
+.update-prompt-btn {
+  background: var(--brand-red);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.update-prompt-btn:active {
+  transform: scale(0.96);
+}
+
+@keyframes update-pop {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
