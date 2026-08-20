@@ -139,9 +139,15 @@ async def list_routes():
         })
     return routes
 
-@app.get("/stops")
-async def list_stops():
-    """Return all unique stops across all routes, with the routes that serve each stop."""
+def build_stops_list():
+    """Build the list of unique stops across all routes.
+
+    Each stop carries:
+      - route_ids: routes that serve the stop (legacy)
+      - route_positions: { route_id: position } — the stop's sequence position
+        on each route, enabling the frontend to rank stops by ride efficiency
+        (fewest stops forward to a destination on a given route).
+    """
     stops = {}
     for rid, stop_list in stops_by_route.items():
         for s in stop_list:
@@ -155,10 +161,17 @@ async def list_stops():
                     "latitude": s.get("latitude"),
                     "longitude": s.get("longitude"),
                     "route_ids": [],
+                    "route_positions": {},
                 }
+            stops[sid]["route_positions"][rid] = int(s.get("position"))
             if rid not in stops[sid]["route_ids"]:
                 stops[sid]["route_ids"].append(rid)
     return list(stops.values())
+
+@app.get("/stops")
+async def list_stops():
+    """Return all unique stops across all routes, with the routes that serve each stop."""
+    return build_stops_list()
 
 @app.get("/routes/{route_id}/shape")
 async def get_route_shape(route_id: str):

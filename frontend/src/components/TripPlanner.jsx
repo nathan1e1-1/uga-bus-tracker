@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
 import { buildRecommendations } from '../utils/recommendations';
+import { pickOptimalOrigin } from '../utils/optimalOrigin';
 
 export default function TripPlanner({
   routes,
@@ -31,14 +32,65 @@ export default function TripPlanner({
     }, null);
   }, [userLocation, allStops]);
 
+  // Per-route number of stops, needed for wrap-aware ride-efficiency math.
+  const routeStopCounts = useMemo(() => {
+    const counts = {};
+    for (const r of routes) {
+      if (r.stop_count) counts[r.route_id] = r.stop_count;
+    }
+    return counts;
+  }, [routes]);
+
+  // Candidate origin stops near the user (within a radius, sorted by distance).
+  const nearbyCandidateStops = useMemo(() => {
+    if (!userLocation || !allStops.length) return [];
+    const RADIUS_M = 400;
+    return allStops
+      .map((s) => ({
+        ...s,
+        distance: haversineDistance(
+          userLocation.lat,
+          userLocation.lng,
+          s.latitude || s.lat,
+          s.longitude || s.lng
+        ),
+      }))
+      .filter((s) => s.distance <= RADIUS_M)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 10);
+  }, [userLocation, allStops]);
+
+  // The best origin stop for the chosen destination when using my location.
+  const optimalOrigin = useMemo(() => {
+    if (!useMyLocation) return null;
+    const toStop = toStopId
+      ? allStops.find((s) => String(s.stop_id) === String(toStopId))
+      : null;
+    if (!toStop) return null;
+    return pickOptimalOrigin({
+      candidateStops: nearbyCandidateStops,
+      toStop,
+      routeStopCounts,
+      liveBuses,
+    });
+  }, [useMyLocation, toStopId, nearbyCandidateStops, routeStopCounts, liveBuses, allStops]);
+
+  // Effective origin: optimal stop when using my location + destination,
+  // otherwise fall back to the global nearest stop.
+  const effectiveOriginStop = useMemo(() => {
+    if (!useMyLocation) return null;
+    if (optimalOrigin) return optimalOrigin.fromStop;
+    return globalNearestStop;
+  }, [useMyLocation, optimalOrigin, globalNearestStop]);
+
   // Auto-set "from" stop when user location is available
   useEffect(() => {
-    if (useMyLocation && globalNearestStop) {
-      setFromStopId(String(globalNearestStop.stop_id));
+    if (useMyLocation && effectiveOriginStop) {
+      setFromStopId(String(effectiveOriginStop.stop_id));
     } else if (!useMyLocation) {
       setFromStopId('');
     }
-  }, [useMyLocation, globalNearestStop]);
+  }, [useMyLocation, effectiveOriginStop]);
 
   // Find routes that serve both from and to stops
   const matchingRoutes = useMemo(() => {
@@ -144,9 +196,9 @@ export default function TripPlanner({
                 />
                 Use my current location
               </label>
-              {useMyLocation && globalNearestStop && (
+              {useMyLocation && effectiveOriginStop && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  Nearest stop: <strong style={{ color: 'var(--text-primary)' }}>{globalNearestStop.name}</strong> ({Math.round(globalNearestStop.distance)}m away)
+                  {toStopId ? 'Best stop' : 'Nearest stop'}: <strong style={{ color: 'var(--text-primary)' }}>{effectiveOriginStop.name}</strong>
                 </div>
               )}
             </div>
@@ -156,7 +208,7 @@ export default function TripPlanner({
             <label className="field-label">From</label>
             {useMyLocation ? (
               <div className="stop-select" style={{ background: 'var(--surface-hover)', cursor: 'default' }}>
-                {globalNearestStop ? globalNearestStop.name : 'Getting location...'}
+                {effectiveOriginStop ? effectiveOriginStop.name : 'Getting location...'}
               </div>
             ) : (
               <select
