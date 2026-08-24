@@ -67,6 +67,9 @@ export function useRouteShapes({
     }
 
     let cancelled = false;
+    // Clear the previous route's shape so stale stops/polyline don't remain
+    // visible while the new route's data is loading.
+    setRouteShape(null);
     setShapeLoading(true);
 
     Promise.all(group.ids.map((id) => fetchShape(id)))

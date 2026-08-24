@@ -106,6 +106,13 @@ html, body, #root {
   pointer-events: auto;
 }
 
+.top-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;

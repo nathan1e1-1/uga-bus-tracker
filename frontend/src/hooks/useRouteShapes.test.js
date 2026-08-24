@@ -89,4 +89,41 @@ describe('useRouteShapes', () => {
     // No extra fetch — both direction shapes were already loaded.
     expect(fetchShape).toHaveBeenCalledTimes(2);
   });
+
+  it('clears the stale route shape immediately when switching to a new route', async () => {
+    const GROUPS = [
+      { displayName: 'Route A', ids: ['A1'] },
+      { displayName: 'Route B', ids: ['B1'] },
+    ];
+    // Route B loads slowly, so the stale Route A shape must not linger.
+    const fetchShape = vi.fn((id) =>
+      id === 'B1' ? new Promise((r) => setTimeout(() => r(shapeFor('B1')), 50)) : Promise.resolve(shapeFor('A1'))
+    );
+    const onPicked = vi.fn();
+
+    const { rerender, result } = renderHook(
+      ({ g }) =>
+        useRouteShapes({
+          selectedGroupName: g,
+          routeGroups: GROUPS,
+          userLocation: null,
+          hasManualDirection: false,
+          selectedRouteId: null,
+          onPicked,
+          fetchShape,
+        }),
+      { initialProps: { g: 'Route A' } }
+    );
+    await waitFor(() => expect(result.current.routeShape?.route_id).toBe('A1'));
+
+    // Switch to Route B — the old Route A shape must not remain visible.
+    rerender({ g: 'Route B' });
+
+    // After rerender triggers the new fetch, routeShape must be null (cleared),
+    // not still pointing at Route A's stops.
+    expect(result.current.routeShape).toBeNull();
+
+    // Once B loads, it becomes the active shape.
+    await waitFor(() => expect(result.current.routeShape?.route_id).toBe('B1'));
+  });
 });

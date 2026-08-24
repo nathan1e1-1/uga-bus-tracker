@@ -7,6 +7,7 @@ import { useGeolocation, findNearestStop } from './hooks/useGeolocation';
 import { useRouteShapes } from './hooks/useRouteShapes';
 import BusMap from './components/BusMap';
 import TripPlanner from './components/TripPlanner';
+import RouteSelector from './components/RouteSelector';
 import './App.css';
 
 export default function App() {
@@ -80,42 +81,23 @@ export default function App() {
           <span className="brand-text">UGA BUS</span>
         </div>
 
-        {routesLoading ? (
-          <span className="pill-select" style={{ opacity: 0.6 }}>Loading routes…</span>
-        ) : routesError ? (
-          <span className="pill-select" style={{ color: '#EF4444' }}>Routes unavailable</span>
-        ) : (
-          <select
-            className="pill-select"
-            value={selectedGroupName || ''}
-            onChange={(e) => {
-              setSelectedGroupName(e.target.value);
-              setHasManualDirection(false);
-            }}
-          >
-            <option value="" disabled>Choose route…</option>
-            {routeGroups.map((g) => (
-              <option key={g.displayName} value={g.displayName}>
-                {g.displayName}
-              </option>
-            ))}
-          </select>
-        )}
-        {selectedRouteId && routeGroups.find((g) => g.displayName === selectedGroupName)?.ids.length > 1 && (
-          <button
-            className="reverse-btn"
-            onClick={() => {
-              const group = routeGroups.find((g) => g.displayName === selectedGroupName);
-              const nextId = getOppositeDirectionId(group, selectedRouteId);
-              if (!nextId) return;
-              setHasManualDirection(true);
-              setSelectedRouteId(nextId);
-            }}
-            aria-label="Reverse direction"
-          >
-            ⇄
-          </button>
-        )}
+        <RouteSelector
+          routeGroups={routeGroups}
+          selectedGroupName={selectedGroupName}
+          selectedRouteId={selectedRouteId}
+          routesLoading={routesLoading}
+          routesError={routesError}
+          onSelect={(name) => {
+            setSelectedGroupName(name);
+            setHasManualDirection(false);
+          }}
+          onReverse={(group) => {
+            const nextId = getOppositeDirectionId(group, selectedRouteId);
+            if (!nextId) return;
+            setHasManualDirection(true);
+            setSelectedRouteId(nextId);
+          }}
+        />
       </div>
 
       {/* Map — full screen hero */}
