@@ -8,6 +8,7 @@ import { useRouteShapes } from './hooks/useRouteShapes';
 import BusMap from './components/BusMap';
 import TripPlanner from './components/TripPlanner';
 import RouteSelector from './components/RouteSelector';
+import { TripSummary } from './components/TripSummary';
 import './App.css';
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
   const [selectedGroupName, setSelectedGroupName] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [showPlanner, setShowPlanner] = useState(false);
+  const [activeTrip, setActiveTrip] = useState(null);
   const [hasManualDirection, setHasManualDirection] = useState(false);
   const [routesError, setRoutesError] = useState(null);
   const [routesLoading, setRoutesLoading] = useState(true);
@@ -108,8 +110,14 @@ export default function App() {
           isDark={isDark}
           userLocation={userLocation}
           nearestStop={nearestStop}
+          trip={activeTrip}
         />
       </main>
+
+      {/* Floating step-by-step trip summary (hero for new students) */}
+      {activeTrip && !showPlanner && (
+        <TripSummary trip={activeTrip} onClose={() => setActiveTrip(null)} />
+      )}
 
       {/* Bottom bar: controls left */}
       <div className="bottom-bar">
@@ -191,6 +199,7 @@ export default function App() {
           userLocation={userLocation}
           nearestStop={nearestStop}
           onClose={() => setShowPlanner(false)}
+          onPlanTrip={setActiveTrip}
           onDirectionChange={(nextId) => {
             setSelectedRouteId(nextId);
             setHasManualDirection(true);

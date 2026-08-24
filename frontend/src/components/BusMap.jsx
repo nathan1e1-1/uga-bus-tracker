@@ -70,7 +70,22 @@ function createLocationIcon() {
   });
 }
 
-export default function BusMap({ routeShape, buses, isDark, userLocation, nearestStop }) {
+function createHighlightIcon(kind) {
+  const isDest = kind === 'dest';
+  return L.divIcon({
+    className: '',
+    html: `
+      <div class="trip-highlight ${isDest ? 'dest' : 'origin'}">
+        ${isDest ? '▼' : '▲'}
+      </div>
+    `,
+    iconSize: isDest ? [26, 26] : [24, 24],
+    iconAnchor: [12, isDest ? 24 : 6],
+    popupAnchor: isDest ? [1, -30] : [0, 18],
+  });
+}
+
+export default function BusMap({ routeShape, buses, isDark, userLocation, nearestStop, trip }) {
   const bounds = useMemo(() => {
     const pts = [];
     if (routeShape) {
@@ -115,6 +130,30 @@ export default function BusMap({ routeShape, buses, isDark, userLocation, neares
           positions={polyPoints}
           pathOptions={{ color: color || '#3B82F6', weight: 5, opacity: 0.75 }}
         />
+
+        {/* Walking path to the origin stop */}
+        {trip?.walkLine && (
+          <Polyline
+            positions={trip.walkLine}
+            pathOptions={{ color: '#BA0C2F', weight: 3, opacity: 0.9, dashArray: '6 6' }}
+          />
+        )}
+
+        {/* Origin + get-off stop highlights */}
+        {trip?.originStop && trip.originStop.latitude != null && (
+          <Marker
+            position={[trip.originStop.latitude, trip.originStop.longitude]}
+            icon={createHighlightIcon('origin')}
+            zIndexOffset={900}
+          />
+        )}
+        {trip?.getOffStop && trip.getOffStop.latitude != null && (
+          <Marker
+            position={[trip.getOffStop.latitude, trip.getOffStop.longitude]}
+            icon={createHighlightIcon('dest')}
+            zIndexOffset={950}
+          />
+        )}
 
         {/* Stop markers */}
         {stops.map((stop) => (

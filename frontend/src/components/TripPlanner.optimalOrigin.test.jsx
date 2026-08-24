@@ -17,10 +17,13 @@ const bus = (id, etas) => ({
   next_stop: 'X', etas,
 });
 const liveBuses = [
-  bus('b1', { '155115': { eta_seconds: 120, eta_display: '2 min', eta_source: 'live' } }),
+  bus('b1', {
+    '155115': { eta_seconds: 120, eta_display: '2 min', eta_source: 'live' },
+    '155132': { eta_seconds: 480, eta_display: '8 min', eta_source: 'live' },
+  }),
 ];
 
-function renderPlanner() {
+function renderPlanner(props = {}) {
   return render(
     <TripPlanner
       routes={routes}
@@ -34,6 +37,8 @@ function renderPlanner() {
       onClose={vi.fn()}
       onDirectionChange={vi.fn()}
       onSelectRoute={vi.fn()}
+      onPlanTrip={vi.fn()}
+      {...props}
     />
   );
 }
@@ -53,5 +58,19 @@ describe('TripPlanner optimal origin with my location', () => {
     fireEvent.change(selects[0], { target: { value: '155132' } });
 
     expect(fromDisplay().textContent).toContain('Eastbound');
+  });
+
+  it('shows the step-by-step trip summary hero and reports the plan', () => {
+    renderPlanner();
+    fireEvent.click(screen.getByRole('checkbox'));
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[0], { target: { value: '155132' } });
+
+    const steps = screen.getAllByRole('listitem');
+    expect(steps).toHaveLength(3);
+    expect(steps[0].textContent).toContain('Walk to Coliseum/SLC Eastbound');
+    expect(steps[1].textContent).toContain('Take Main Campus bus');
+    expect(steps[2].textContent).toContain('Ride to Joe Frank Harris Commons');
+    expect(steps[2].textContent).toContain('get off at Joe Frank Harris Commons');
   });
 });

@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { haversineDistance } from '../hooks/useGeolocation';
 import { buildRecommendations } from '../utils/recommendations';
 import { pickOptimalOrigin } from '../utils/optimalOrigin';
+import { getTripItinerary } from '../utils/itinerary';
+import { TripSummary } from './TripSummary';
 
 export default function TripPlanner({
   routes,
@@ -13,6 +15,7 @@ export default function TripPlanner({
   onClose,
   onDirectionChange,
   onSelectRoute,
+  onPlanTrip,
 }) {
   const [fromStopId, setFromStopId] = useState('');
   const [toStopId, setToStopId] = useState('');
@@ -150,6 +153,22 @@ export default function TripPlanner({
     return buildRecommendations({ fromStop, toStop, matchingRoutes, liveBuses });
   }, [fromStopId, toStopId, matchingRoutes, liveBuses, allStops]);
 
+  // The single best trip, broken into plain-language steps.
+  const trip = useMemo(() => {
+    const topRec = recommendations[0];
+    if (!topRec || !fromStopId || !toStopId || fromStopId === toStopId) return null;
+    const originStop = allStops.find((s) => String(s.stop_id) === String(fromStopId));
+    const toStop = allStops.find((s) => String(s.stop_id) === String(toStopId));
+    if (!originStop || !toStop) return null;
+    const bus = liveBuses.find((b) => b.bus_id === topRec.bus_id) ?? null;
+    return getTripItinerary({ originStop, toStop, userLocation, bus, routeName: topRec.route_name });
+  }, [recommendations, fromStopId, toStopId, allStops, liveBuses, userLocation]);
+
+  // Surface the plan upward so the map can draw the walk line and highlights.
+  useEffect(() => {
+    if (trip && onPlanTrip) onPlanTrip(trip);
+  }, [trip, onPlanTrip]);
+
   // Calculate distance to each stop from user location
   const stopsWithDistance = useMemo(() => {
     if (!userLocation) return allStops.map((s) => ({ ...s, distance: null }));
@@ -245,6 +264,12 @@ export default function TripPlanner({
           {fromStopId && toStopId && fromStopId === toStopId && (
             <div className="no-results">
               You&apos;re already there.
+            </div>
+          )}
+
+          {trip && (
+            <div className="planner-trip-hero">
+              <TripSummary trip={trip} />
             </div>
           )}
 
